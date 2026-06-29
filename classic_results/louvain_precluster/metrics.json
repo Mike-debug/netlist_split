@@ -1,0 +1,52 @@
+{
+  "algorithm": "louvain_precluster",
+  "cells": 14,
+  "communities": [
+    [
+      "assign_1",
+      "u_and1",
+      "u_ff0",
+      "u_ff2",
+      "u_ff3",
+      "u_or1",
+      "u_xor0"
+    ],
+    [
+      "u_and0",
+      "u_inv0",
+      "u_nand0",
+      "u_or0"
+    ],
+    [
+      "assign_2",
+      "u_ff1",
+      "u_nor0"
+    ]
+  ],
+  "cut_count": 9,
+  "cut_nets": [
+    "clk",
+    "n2",
+    "n4",
+    "n5",
+    "n6",
+    "n7",
+    "q1",
+    "q3",
+    "q4"
+  ],
+  "estimated_speedup": 1.9021739130434783,
+  "imbalance": 1.1428571428571428,
+  "lambda_minus_one": 10,
+  "module": "demo_top",
+  "nets": 21,
+  "note": "Included as a community-detection baseline often used before constrained partitioning.",
+  "runtime_ms": 1.5296500641852617,
+  "sizes": [
+    4,
+    4,
+    3,
+    3
+  ],
+  "tool": "NetworkX Louvain community pre-clustering"
+}

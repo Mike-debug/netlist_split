@@ -1,0 +1,35 @@
+{
+  "algorithm": "circuit_gnn_style",
+  "cells": 14,
+  "cut_count": 12,
+  "cut_nets": [
+    "clk",
+    "n1",
+    "n2",
+    "n3",
+    "n4",
+    "n5",
+    "n7",
+    "n8",
+    "q1",
+    "q2",
+    "q3",
+    "q4"
+  ],
+  "epochs": 250,
+  "estimated_speedup": 1.6857314870559905,
+  "final_loss": 0.777725875377655,
+  "imbalance": 1.1428571428571428,
+  "lambda_minus_one": 17,
+  "module": "demo_top",
+  "nets": 21,
+  "note": "Uses graph neural message passing and differentiable cut/balance loss; not the upstream repository code.",
+  "runtime_ms": 711.183327017352,
+  "sizes": [
+    4,
+    4,
+    3,
+    3
+  ],
+  "tool": "PyTorch GCN-style reproduction of CircuitPartitioning-GNN idea"
+}

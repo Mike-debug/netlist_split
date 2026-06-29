@@ -1,0 +1,33 @@
+{
+  "algorithm": "kahypar",
+  "cells": 14,
+  "config": "classic_configs/km1_kKaHyPar_sea20.ini",
+  "cut_count": 8,
+  "cut_nets": [
+    "n2",
+    "n4",
+    "n7",
+    "n8",
+    "q1",
+    "q2",
+    "q3",
+    "q4"
+  ],
+  "epsilon": 0.03,
+  "estimated_speedup": 1.9872249822569201,
+  "imbalance": 1.1428571428571428,
+  "kahypar_cut": 8,
+  "kahypar_lambda_minus_one": 11,
+  "lambda_minus_one": 11,
+  "module": "demo_top",
+  "nets": 21,
+  "objective": "km1",
+  "runtime_ms": 3.590955981053412,
+  "sizes": [
+    4,
+    3,
+    4,
+    3
+  ],
+  "tool": "KaHyPar Python binding"
+}

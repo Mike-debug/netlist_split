@@ -1,0 +1,15 @@
+vertex_id	cell
+1	u_and0
+2	u_or0
+3	u_nand0
+4	u_inv0
+5	u_ff0
+6	u_ff1
+7	u_and1
+8	u_nor0
+9	u_or1
+10	u_ff2
+11	u_xor0
+12	u_ff3
+13	assign_1
+14	assign_2

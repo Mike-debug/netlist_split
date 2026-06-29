@@ -1,0 +1,21 @@
+{
+  "cells": 14,
+  "input": "sample_netlist.v",
+  "module": "demo_top",
+  "nets": 21,
+  "openroad_tritonpart": {
+    "available": false,
+    "hgr": "classic_results/openroad_tritonpart/demo_top.hgr",
+    "mode": "script-generated",
+    "solution_file": "classic_results/openroad_tritonpart/demo_top.hgr.part.4",
+    "tcl": "classic_results/openroad_tritonpart/run_tritonpart_hypergraph.tcl",
+    "tool": "OpenROAD Partition Manager / TritonPart"
+  },
+  "requested_k": 4,
+  "tools": {
+    "kahypar_python": true,
+    "networkx": true,
+    "openroad": false,
+    "torch": true
+  }
+}

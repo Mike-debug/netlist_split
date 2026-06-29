@@ -1,0 +1,25 @@
+{
+  "algorithm": "fm",
+  "cells": 14,
+  "cut_count": 8,
+  "cut_nets": [
+    "n2",
+    "n4",
+    "n5",
+    "n6",
+    "n7",
+    "q1",
+    "q2",
+    "q4"
+  ],
+  "estimated_speedup": 1.5503875968992247,
+  "imbalance": 1.0,
+  "lambda_minus_one": 8,
+  "module": "demo_top",
+  "nets": 21,
+  "runtime_ms": 0.39399403613060713,
+  "sizes": [
+    7,
+    7
+  ]
+}

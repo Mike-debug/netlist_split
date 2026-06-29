@@ -1,0 +1,113 @@
+{
+  "algorithm": "gl0am_cone_style",
+  "cells": 14,
+  "cones": [
+    {
+      "cells": [
+        "u_and0",
+        "u_inv0",
+        "u_nand0",
+        "u_or0"
+      ],
+      "root": "u_ff0"
+    },
+    {
+      "cells": [
+        "u_or0"
+      ],
+      "root": "u_ff1"
+    },
+    {
+      "cells": [
+        "u_and0",
+        "u_and1",
+        "u_ff0",
+        "u_ff1",
+        "u_inv0",
+        "u_nand0",
+        "u_nor0",
+        "u_or0",
+        "u_or1"
+      ],
+      "root": "u_ff2"
+    },
+    {
+      "cells": [
+        "u_and0",
+        "u_and1",
+        "u_ff0",
+        "u_ff1",
+        "u_ff2",
+        "u_inv0",
+        "u_nand0",
+        "u_nor0",
+        "u_or0",
+        "u_or1",
+        "u_xor0"
+      ],
+      "root": "u_ff3"
+    },
+    {
+      "cells": [
+        "assign_1",
+        "u_and0",
+        "u_and1",
+        "u_ff0",
+        "u_ff1",
+        "u_ff2",
+        "u_ff3",
+        "u_inv0",
+        "u_nand0",
+        "u_nor0",
+        "u_or0",
+        "u_or1",
+        "u_xor0"
+      ],
+      "root": "output:y"
+    },
+    {
+      "cells": [
+        "assign_2",
+        "u_and0",
+        "u_and1",
+        "u_ff0",
+        "u_ff1",
+        "u_ff2",
+        "u_inv0",
+        "u_nand0",
+        "u_nor0",
+        "u_or0",
+        "u_or1"
+      ],
+      "root": "output:z"
+    }
+  ],
+  "cut_count": 11,
+  "cut_nets": [
+    "clk",
+    "n1",
+    "n2",
+    "n3",
+    "n4",
+    "n5",
+    "n7",
+    "n8",
+    "q1",
+    "q2",
+    "q3"
+  ],
+  "estimated_speedup": 1.752190237797247,
+  "imbalance": 1.1428571428571428,
+  "lambda_minus_one": 16,
+  "module": "demo_top",
+  "nets": 21,
+  "note": "GL0AM itself is a GPU simulator; this reproduces the logic-cone grouping strategy described by the project.",
+  "runtime_ms": 0.08352100849151611,
+  "sizes": [
+    4,
+    4,
+    3,
+    3
+  ],
+  "tool": "GL0AM-inspired logic-cone block partitioning"
+}

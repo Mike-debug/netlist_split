@@ -1,0 +1,26 @@
+{
+  "algorithm": "random",
+  "cells": 14,
+  "cut_count": 9,
+  "cut_nets": [
+    "clk",
+    "n1",
+    "n2",
+    "n4",
+    "n7",
+    "n8",
+    "q1",
+    "q2",
+    "q4"
+  ],
+  "estimated_speedup": 1.5151515151515151,
+  "imbalance": 1.0,
+  "lambda_minus_one": 9,
+  "module": "demo_top",
+  "nets": 21,
+  "runtime_ms": 0.06516394205391407,
+  "sizes": [
+    7,
+    7
+  ]
+}
