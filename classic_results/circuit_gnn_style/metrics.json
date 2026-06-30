@@ -24,7 +24,7 @@
   "module": "demo_top",
   "nets": 21,
   "note": "Uses graph neural message passing and differentiable cut/balance loss; not the upstream repository code.",
-  "runtime_ms": 711.183327017352,
+  "runtime_ms": 854.8311420017853,
   "sizes": [
     4,
     4,

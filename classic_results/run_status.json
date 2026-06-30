@@ -1,21 +1,207 @@
 {
   "cells": 14,
   "input": "sample_netlist.v",
+  "metis": {
+    "metrics": {
+      "algorithm": "metis",
+      "cells": 14,
+      "command": [
+        "/home/caesar/ccode/netlist_split/.tooling/metis_extracted/usr/bin/gpmetis",
+        "-ptype=rb",
+        "-seed=7",
+        "/home/caesar/ccode/netlist_split/classic_results/metis/demo_top.graph",
+        "4"
+      ],
+      "cut_count": 7,
+      "cut_nets": [
+        "clk",
+        "n2",
+        "n4",
+        "n5",
+        "n6",
+        "n8",
+        "q3"
+      ],
+      "estimated_speedup": 2.0802377414561666,
+      "gpmetis_exe": "/home/caesar/ccode/netlist_split/.tooling/metis_extracted/usr/bin/gpmetis",
+      "graph_file": "/home/caesar/ccode/netlist_split/classic_results/metis/demo_top.graph",
+      "imbalance": 1.1428571428571428,
+      "lambda_minus_one": 9,
+      "log_tail": "******************************************************************************\nMETIS 5.0 Copyright 1998-13, Regents of the University of Minnesota\n (HEAD: , Built on: Apr 22 2024, 09:48:56)\n size of idx_t: 32bits, real_t: 32bits, idx_t *: 64bits\n\nGraph Information -----------------------------------------------------------\n Name: /home/caesar/ccode/netlist_split/classic_results/metis/demo_top.graph, #Vertices: 14, #Edges: 28, #Parts: 4\n\nOptions ---------------------------------------------------------------------\n ptype=rb, objtype=cut, ctype=shem, rtype=fm, iptype=grow\n dbglvl=0, ufactor=1.001, no2hop=NO, minconn=NO, contig=NO, nooutput=NO\n seed=7, niter=10, ncuts=1\n\nRecursive Partitioning ------------------------------------------------------\n - Edgecut: 14, communication volume: 21.\n\n - Balance:\n     constraint #0:  1.143 out of 0.286\n\n - Most overweight partition:\n     pid: 1, actual: 4, desired: 3, ratio: 1.14.\n\n - Subdomain connectivity: max: 3, min: 2, avg: 2.50\n\n - Each partition is contiguous.\n\nTiming Information ----------------------------------------------------------\n  I/O:          \t\t   0.001 sec\n  Partitioning: \t\t   0.000 sec   (METIS time)\n  Reporting:    \t\t   0.000 sec\n\nMemory Information ----------------------------------------------------------\n  Max memory used:\t\t   0.050 MB\n******************************************************************************\n",
+      "module": "demo_top",
+      "nets": 21,
+      "note": "Hyperedges are projected to a weighted cell-cell graph before running METIS.",
+      "ptype": "rb",
+      "runtime_ms": 5.5805210140533745,
+      "sizes": [
+        3,
+        4,
+        3,
+        4
+      ],
+      "solution_file": "/home/caesar/ccode/netlist_split/classic_results/metis/demo_top.graph.part.4",
+      "tool": "METIS gpmetis"
+    },
+    "run_status": "executed"
+  },
   "module": "demo_top",
+  "mtkahypar": {
+    "metrics": {
+      "algorithm": "mt_kahypar",
+      "cells": 14,
+      "command": [
+        "/home/caesar/ccode/netlist_split/.tooling/src/mt-kahypar/build_gcc13/mt-kahypar/application/MtKaHyPar",
+        "-h",
+        "/home/caesar/ccode/netlist_split/classic_results/mt_kahypar/demo_top.hgr",
+        "-k",
+        "4",
+        "-e",
+        "0.03",
+        "-o",
+        "km1",
+        "--preset-type=default",
+        "-t",
+        "2",
+        "--seed",
+        "7",
+        "--write-partition-file",
+        "--partition-output-folder=/home/caesar/ccode/netlist_split/classic_results/mt_kahypar"
+      ],
+      "cut_count": 8,
+      "cut_nets": [
+        "clk",
+        "n2",
+        "n4",
+        "n5",
+        "n7",
+        "q1",
+        "q2",
+        "q3"
+      ],
+      "epsilon": 0.03,
+      "estimated_speedup": 1.9872249822569201,
+      "hgr": "/home/caesar/ccode/netlist_split/classic_results/mt_kahypar/demo_top.hgr",
+      "imbalance": 1.1428571428571428,
+      "lambda_minus_one": 8,
+      "log_tail": "***************** \nHypergraph Information \nName : Coarsened Hypergraph \n# HNs: 14  # HEs: 13  # pins: 33  # graph edges: 7 \nHE size             HE weight           HN degree           HN weight \n| min= 2            | min= 1            | min= 1            | min= 1           \n| Q1 = 2            | Q1 = 1            | Q1 = 2            | Q1 = 1           \n| med= 2            | med= 1            | med= 2            | med= 1           \n| Q3 = 3            | Q3 = 1            | Q3 = 3            | Q3 = 1           \n| max= 4            | max= 1            | max= 3            | max= 1           \n| avg= 2.53846      | avg= 1            | avg= 2.35714      | avg= 1           \n| sd = 0.660225     | sd = 0            | sd = 0.744946     | sd = 0           \n\n******************************************************************************** \n*                           Initial Partitioning...                            * \n******************************************************************************** \nInitial Partitioning Results: \nkm1       = 8 \nimbalance = 0 \n\n******************************************************************************** \n*                               Local Search...                                * \n******************************************************************************** \nLocal Search Results: \nkm1       = 8 \nimbalance = 0 \n\n******************************************************************************** \n*                             Partitioning Result                              * \n******************************************************************************** \nObjectives: \n  km1                  = 8 (primary objective function) \n  cut                  = 8  \n  soed                 = 16  \n  Imbalance            = 0  \n  Partitioning Time    = 0.006001 s  \n\nPartition sizes and weights:  \n|block 0| = 3  w( 0 ) = 3  max( 0 ) = 4\n|block 1| = 4  w( 1 ) = 4  max( 1 ) = 4\n|block 2| = 4  w( 2 ) = 4  max( 2 ) = 4\n|block 3| = 3  w( 3 ) = 3  max( 3 ) = 4\n \n",
+      "module": "demo_top",
+      "mtkahypar_exe": "/home/caesar/ccode/netlist_split/.tooling/src/mt-kahypar/build_gcc13/mt-kahypar/application/MtKaHyPar",
+      "nets": 21,
+      "objective": "km1",
+      "runtime_ms": 38.09613402700052,
+      "sizes": [
+        3,
+        4,
+        4,
+        3
+      ],
+      "solution_file": "/home/caesar/ccode/netlist_split/classic_results/mt_kahypar/demo_top.hgr.part4.epsilon0.03.seed7.KaHyPar",
+      "threads": 2,
+      "tool": "Mt-KaHyPar CLI"
+    },
+    "run_status": "executed"
+  },
   "nets": 21,
   "openroad_tritonpart": {
-    "available": false,
+    "available": true,
     "hgr": "classic_results/openroad_tritonpart/demo_top.hgr",
+    "log": "OpenROAD v2.0-17198-g8396d0866 \nFeatures included (+) or not (-): +Charts +GPU +GUI +Python : None\nThis program is licensed under the BSD-3 license. See the LICENSE file for details.\nComponents of this program may be licensed under more restrictive licenses which must be honored.\n[INFO PAR-0002] Partitioning hypergraph.\nPartitioning Parameters\n\tNumber of partitions = 4\n\tUBfactor = 2.0\n\tSeed = 7\n\tVertex dimensions = 1\n\tHyperedge dimensions = 1\n\tPlacement dimensions = 0\n\tGlobal net threshold = 1000\n[INFO PAR-0038] Display Used Files\n\tHypergraph file: classic_results/openroad_tritonpart/demo_top.hgr\n\tSolution file: classic_results/openroad_tritonpart/demo_top.hgr.part.4\n[WARNING PAR-0003] Timing-driven mode is not supported! Disabling timing aware.\n[INFO PAR-0017] Read hypergraph has 14 vertices and 13 hyperedges.\n[INFO PAR-0007] Evaluating hypergraph partitioning solution.\nGeneral Parameters\n\tNumber of partitions = 4\n\tUBfactor = 2.0\n\tSeed = 0\n\tVertex dimensions = 1\n\tHyperedge dimensions = 1\n\tPlacement dimensions = 0\n[INFO PAR-0038] Display Used Files\n\tHypergraph file: classic_results/openroad_tritonpart/demo_top.hgr\n\tSolution file: classic_results/openroad_tritonpart/demo_top.hgr.part.4\n[WARNING PAR-0009] Timing-driven mode is not supported! Disabling timing aware.\n[INFO PAR-0017] Read hypergraph has 14 vertices and 13 hyperedges.\n",
+    "metrics": {
+      "algorithm": "openroad_tritonpart",
+      "cells": 14,
+      "cut_count": 10,
+      "cut_nets": [
+        "clk",
+        "n2",
+        "n3",
+        "n6",
+        "n7",
+        "n8",
+        "q1",
+        "q2",
+        "q3",
+        "q4"
+      ],
+      "estimated_speedup": 1.8241042345276874,
+      "imbalance": 1.1428571428571428,
+      "lambda_minus_one": 14,
+      "module": "demo_top",
+      "nets": 21,
+      "note": "Metrics are computed from the OpenROAD-generated .hgr.part.k solution file.",
+      "openroad_exe": "/home/caesar/ccode/netlist_split/.tooling/openroad_extracted/usr/bin/openroad",
+      "openroad_version": "v2.0-17198-g8396d0866",
+      "runtime_ms": 387.0521050412208,
+      "sizes": [
+        4,
+        4,
+        4,
+        2
+      ],
+      "solution_file": "/home/caesar/ccode/netlist_split/classic_results/openroad_tritonpart/demo_top.hgr.part.4",
+      "tool": "OpenROAD Partition Manager / TritonPart"
+    },
     "mode": "script-generated",
+    "openroad_exe": "/home/caesar/ccode/netlist_split/.tooling/openroad_extracted/usr/bin/openroad",
+    "returncode": 0,
+    "run_status": "executed",
+    "runtime_ms": 387.0521050412208,
     "solution_file": "classic_results/openroad_tritonpart/demo_top.hgr.part.4",
     "tcl": "classic_results/openroad_tritonpart/run_tritonpart_hypergraph.tcl",
     "tool": "OpenROAD Partition Manager / TritonPart"
   },
+  "patoh": {
+    "metrics": {
+      "algorithm": "patoh",
+      "cells": 14,
+      "command": [
+        "/home/caesar/ccode/netlist_split/.tooling/patoh_extracted/build/Linux-x86_64/patoh",
+        "/home/caesar/ccode/netlist_split/classic_results/patoh/demo_top.u",
+        "4",
+        "UM=O",
+        "PQ=D",
+        "WI=1"
+      ],
+      "cut_count": 8,
+      "cut_nets": [
+        "clk",
+        "n2",
+        "n4",
+        "n5",
+        "n7",
+        "q1",
+        "q2",
+        "q3"
+      ],
+      "estimated_speedup": 1.9872249822569201,
+      "imbalance": 1.1428571428571428,
+      "lambda_minus_one": 8,
+      "license_note": "Official PaToH binary is free for non-commercial research use; commercial use requires a license.",
+      "log_tail": "\n+++++++++++++++++++++++++++++++++++++++++++++++++++++++\n+++ PaToH v3.3 (c) Nov 1999-, by  Umit V. Catalyurek\n+++ Build Date: Wed Jul 15 00:24:52 2020 -0400\n+++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n********************************************************************************\nHypergraph : /home/caesar/ccode/netlist_split/classic_results/patoh/demo_top.u   #Cells :    14   #Nets :    13   #Pins :    33\n********************************************************************************\n 4-way partitioning results of PaToH:\n\n 'Con - 1' Cost:     8\n Part Weights   : Min=          3 (0.143) Max=          4 (0.143)\n---- BALANCE IS NOT TIGHT ENOUGH ----\n--------------------------------------------------------------------------------\nI/O          :       0.000 sec\nI.Perm/Cons.H:       0.000 sec  ( 0.3%)\nCoarsening   :       0.000 sec  ( 0.4%)\nPartitioning :       0.001 sec  (80.0%)\nUncoarsening :       0.000 sec  (13.8%)\nTotal        :       0.001 sec\nTotal (w I/O):       0.001 sec\n--------------------------------------------------------------------------------\n\n",
+      "module": "demo_top",
+      "nets": 21,
+      "objective": "connectivity-1",
+      "patoh_exe": "/home/caesar/ccode/netlist_split/.tooling/patoh_extracted/build/Linux-x86_64/patoh",
+      "patoh_file": "/home/caesar/ccode/netlist_split/classic_results/patoh/demo_top.u",
+      "runtime_ms": 2.8948200051672757,
+      "sizes": [
+        4,
+        3,
+        4,
+        3
+      ],
+      "solution_file": "/home/caesar/ccode/netlist_split/classic_results/patoh/demo_top.u.part.4",
+      "tool": "PaToH standalone CLI"
+    },
+    "run_status": "executed"
+  },
   "requested_k": 4,
   "tools": {
+    "gpmetis": true,
     "kahypar_python": true,
+    "mtkahypar": true,
     "networkx": true,
-    "openroad": false,
+    "openroad": true,
+    "patoh": true,
     "torch": true
   }
 }

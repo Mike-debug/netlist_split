@@ -1,0 +1,15 @@
+cell	partition
+assign_1	2
+assign_2	3
+u_and0	0
+u_and1	1
+u_ff0	1
+u_ff1	1
+u_ff2	2
+u_ff3	2
+u_inv0	0
+u_nand0	0
+u_nor0	3
+u_or0	0
+u_or1	3
+u_xor0	2

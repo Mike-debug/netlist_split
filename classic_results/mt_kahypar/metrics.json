@@ -1,0 +1,53 @@
+{
+  "algorithm": "mt_kahypar",
+  "cells": 14,
+  "command": [
+    "/home/caesar/ccode/netlist_split/.tooling/src/mt-kahypar/build_gcc13/mt-kahypar/application/MtKaHyPar",
+    "-h",
+    "/home/caesar/ccode/netlist_split/classic_results/mt_kahypar/demo_top.hgr",
+    "-k",
+    "4",
+    "-e",
+    "0.03",
+    "-o",
+    "km1",
+    "--preset-type=default",
+    "-t",
+    "2",
+    "--seed",
+    "7",
+    "--write-partition-file",
+    "--partition-output-folder=/home/caesar/ccode/netlist_split/classic_results/mt_kahypar"
+  ],
+  "cut_count": 8,
+  "cut_nets": [
+    "clk",
+    "n2",
+    "n4",
+    "n5",
+    "n7",
+    "q1",
+    "q2",
+    "q3"
+  ],
+  "epsilon": 0.03,
+  "estimated_speedup": 1.9872249822569201,
+  "hgr": "/home/caesar/ccode/netlist_split/classic_results/mt_kahypar/demo_top.hgr",
+  "imbalance": 1.1428571428571428,
+  "lambda_minus_one": 8,
+  "log_tail": "***************** \nHypergraph Information \nName : Coarsened Hypergraph \n# HNs: 14  # HEs: 13  # pins: 33  # graph edges: 7 \nHE size             HE weight           HN degree           HN weight \n| min= 2            | min= 1            | min= 1            | min= 1           \n| Q1 = 2            | Q1 = 1            | Q1 = 2            | Q1 = 1           \n| med= 2            | med= 1            | med= 2            | med= 1           \n| Q3 = 3            | Q3 = 1            | Q3 = 3            | Q3 = 1           \n| max= 4            | max= 1            | max= 3            | max= 1           \n| avg= 2.53846      | avg= 1            | avg= 2.35714      | avg= 1           \n| sd = 0.660225     | sd = 0            | sd = 0.744946     | sd = 0           \n\n******************************************************************************** \n*                           Initial Partitioning...                            * \n******************************************************************************** \nInitial Partitioning Results: \nkm1       = 8 \nimbalance = 0 \n\n******************************************************************************** \n*                               Local Search...                                * \n******************************************************************************** \nLocal Search Results: \nkm1       = 8 \nimbalance = 0 \n\n******************************************************************************** \n*                             Partitioning Result                              * \n******************************************************************************** \nObjectives: \n  km1                  = 8 (primary objective function) \n  cut                  = 8  \n  soed                 = 16  \n  Imbalance            = 0  \n  Partitioning Time    = 0.006001 s  \n\nPartition sizes and weights:  \n|block 0| = 3  w( 0 ) = 3  max( 0 ) = 4\n|block 1| = 4  w( 1 ) = 4  max( 1 ) = 4\n|block 2| = 4  w( 2 ) = 4  max( 2 ) = 4\n|block 3| = 3  w( 3 ) = 3  max( 3 ) = 4\n \n",
+  "module": "demo_top",
+  "mtkahypar_exe": "/home/caesar/ccode/netlist_split/.tooling/src/mt-kahypar/build_gcc13/mt-kahypar/application/MtKaHyPar",
+  "nets": 21,
+  "objective": "km1",
+  "runtime_ms": 38.09613402700052,
+  "sizes": [
+    3,
+    4,
+    4,
+    3
+  ],
+  "solution_file": "/home/caesar/ccode/netlist_split/classic_results/mt_kahypar/demo_top.hgr.part4.epsilon0.03.seed7.KaHyPar",
+  "threads": 2,
+  "tool": "Mt-KaHyPar CLI"
+}

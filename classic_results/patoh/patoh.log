@@ -1,0 +1,24 @@
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++
++++ PaToH v3.3 (c) Nov 1999-, by  Umit V. Catalyurek
++++ Build Date: Wed Jul 15 00:24:52 2020 -0400
++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+********************************************************************************
+Hypergraph : /home/caesar/ccode/netlist_split/classic_results/patoh/demo_top.u   #Cells :    14   #Nets :    13   #Pins :    33
+********************************************************************************
+ 4-way partitioning results of PaToH:
+
+ 'Con - 1' Cost:     8
+ Part Weights   : Min=          3 (0.143) Max=          4 (0.143)
+---- BALANCE IS NOT TIGHT ENOUGH ----
+--------------------------------------------------------------------------------
+I/O          :       0.000 sec
+I.Perm/Cons.H:       0.000 sec  ( 0.3%)
+Coarsening   :       0.000 sec  ( 0.4%)
+Partitioning :       0.001 sec  (80.0%)
+Uncoarsening :       0.000 sec  (13.8%)
+Total        :       0.001 sec
+Total (w I/O):       0.001 sec
+--------------------------------------------------------------------------------
+

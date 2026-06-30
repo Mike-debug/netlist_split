@@ -1,0 +1,40 @@
+{
+  "algorithm": "metis",
+  "cells": 14,
+  "command": [
+    "/home/caesar/ccode/netlist_split/.tooling/metis_extracted/usr/bin/gpmetis",
+    "-ptype=rb",
+    "-seed=7",
+    "/home/caesar/ccode/netlist_split/classic_results/metis/demo_top.graph",
+    "4"
+  ],
+  "cut_count": 7,
+  "cut_nets": [
+    "clk",
+    "n2",
+    "n4",
+    "n5",
+    "n6",
+    "n8",
+    "q3"
+  ],
+  "estimated_speedup": 2.0802377414561666,
+  "gpmetis_exe": "/home/caesar/ccode/netlist_split/.tooling/metis_extracted/usr/bin/gpmetis",
+  "graph_file": "/home/caesar/ccode/netlist_split/classic_results/metis/demo_top.graph",
+  "imbalance": 1.1428571428571428,
+  "lambda_minus_one": 9,
+  "log_tail": "******************************************************************************\nMETIS 5.0 Copyright 1998-13, Regents of the University of Minnesota\n (HEAD: , Built on: Apr 22 2024, 09:48:56)\n size of idx_t: 32bits, real_t: 32bits, idx_t *: 64bits\n\nGraph Information -----------------------------------------------------------\n Name: /home/caesar/ccode/netlist_split/classic_results/metis/demo_top.graph, #Vertices: 14, #Edges: 28, #Parts: 4\n\nOptions ---------------------------------------------------------------------\n ptype=rb, objtype=cut, ctype=shem, rtype=fm, iptype=grow\n dbglvl=0, ufactor=1.001, no2hop=NO, minconn=NO, contig=NO, nooutput=NO\n seed=7, niter=10, ncuts=1\n\nRecursive Partitioning ------------------------------------------------------\n - Edgecut: 14, communication volume: 21.\n\n - Balance:\n     constraint #0:  1.143 out of 0.286\n\n - Most overweight partition:\n     pid: 1, actual: 4, desired: 3, ratio: 1.14.\n\n - Subdomain connectivity: max: 3, min: 2, avg: 2.50\n\n - Each partition is contiguous.\n\nTiming Information ----------------------------------------------------------\n  I/O:          \t\t   0.001 sec\n  Partitioning: \t\t   0.000 sec   (METIS time)\n  Reporting:    \t\t   0.000 sec\n\nMemory Information ----------------------------------------------------------\n  Max memory used:\t\t   0.050 MB\n******************************************************************************\n",
+  "module": "demo_top",
+  "nets": 21,
+  "note": "Hyperedges are projected to a weighted cell-cell graph before running METIS.",
+  "ptype": "rb",
+  "runtime_ms": 5.5805210140533745,
+  "sizes": [
+    3,
+    4,
+    3,
+    4
+  ],
+  "solution_file": "/home/caesar/ccode/netlist_split/classic_results/metis/demo_top.graph.part.4",
+  "tool": "METIS gpmetis"
+}

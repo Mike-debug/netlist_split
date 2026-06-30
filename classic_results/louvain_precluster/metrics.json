@@ -41,7 +41,7 @@
   "module": "demo_top",
   "nets": 21,
   "note": "Included as a community-detection baseline often used before constrained partitioning.",
-  "runtime_ms": 1.5296500641852617,
+  "runtime_ms": 1.9282649736851454,
   "sizes": [
     4,
     4,

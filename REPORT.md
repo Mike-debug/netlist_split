@@ -1,6 +1,6 @@
 # netlistOpt 图分割调研报告与 Demo 落地方案
 
-> 交付日期：2026-06-24  
+> 日期：2026-06-29  
 > 目标场景：EDA 前端网表综合后，将全局网表拆成若干局部子图/子网表，利用局部 STA 信息并行做优化，在尽量保护 PPA 和 timing QoR 的前提下降低优化 wall time。
 
 ## 1. 执行摘要
@@ -16,19 +16,24 @@
 
 - **短期 Demo / 工程验证**：自研轻量超图构建与分割脚本，验证 netlist -> hypergraph -> partition -> sub-netlist/partition report -> parallel optimization stub 的闭环。
 - **中期落地**：接入 KaHyPar / Mt-KaHyPar 或 OpenROAD TritonPart，对真实 benchmark 做 cut、balance、runtime、QoR 对比。
-- **长期优化**：引入 STA slack、critical path、MFFC/logic cone、cell class 多维权重与增量 STA，形成 timing-driven / constraint-driven 的生产级分割器。
+- **长期优化**：引入 STA slack、critical path、MFFC/logic cone、cell class 多维权重与增量 STA，形成 timing-driven / constraint-driven 的生产化分割能力。
 
-## 2. 任务压缩策略
+## 2. 总体技术路线
 
-原计划是 14 天调研 + Demo + 报告。本次期限为 2 天，因此采用以下压缩：
+netlistOpt 的目标不是单独做一个高质量 partition，而是建立“分割、局部约束派生、局部 STA、并行优化、全局合并验证”的完整闭环。工程路线分为三个层次：
 
-| 原计划模块 | 2 天内交付方式 | 验收物 |
+| 层次 | 目标 | 关键输出 |
 | --- | --- | --- |
-| 资料搜集与精读 | 聚焦核心论文、主流工具、开源文档 | 本报告第 4、5、10 节 |
-| 方案设计 | 直接输出 netlistOpt 分区流程和工程路线 | 第 7、8、9 节 |
-| Demo 环境 | 不强依赖重型 EDA 工具，标准 Python 可跑 | `netlist_split_demo.py`、样例 netlist、测试 |
-| 实验结果 | 小型 synthetic benchmark 跑通多算法、多 k | 第 9 节实验表 |
-| 最终报告 | Markdown 版本放在当前目录 | `REPORT.md` |
+| 连接结构分割 | 将 netlist 建模为 graph/hypergraph，比较主流分割器的 cut、balance、runtime | partition assignment、cut net list、partition report |
+| Timing-aware 分割 | 将 SDC/STA 信息转成 hyperedge 权重、group/fixed 约束、边界 budget | critical cut ratio、boundary AAT/RAT、partition SDC |
+| 并行优化闭环 | 在每个 partition 内做局部 STA 与优化，合并后用完整顶层 STA 验证 | per-partition ECO、merge netlist、global WNS/TNS/QoR diff |
+
+因此，本方案的核心判断标准不是单一 cut size，而是：
+
+- partition 是否均衡，能否带来真实并行 wall-time 收益；
+- cut boundary 是否可被 SDC/STA budget 准确建模；
+- 局部优化结果 merge 后是否保持或改善全局 WNS/TNS、power、area；
+- 当局部优化破坏全局 QoR 时，是否可以定位、修复或回滚。
 
 ## 3. 背景与问题定义
 
@@ -65,7 +70,7 @@ global netlist
 | 模型 | 顶点 | 边/超边 | 优点 | 缺点 | 适用 |
 | --- | --- | --- | --- | --- | --- |
 | 普通图 | cell / instance | cell-cell edge | 算法多、实现简单 | 高扇出 net 展开失真 | Demo、快速近似 |
-| 超图 | cell / instance | net hyperedge | 保留 net 多端结构 | 算法复杂、工具依赖更强 | 生产级 VLSI 分割 |
+| 超图 | cell / instance | net hyperedge | 保留 net 多端结构 | 算法复杂、工具依赖更强 | 工业级 VLSI 分割候选 |
 | 有向 DAG | logic node | fanin/fanout arc | 保留方向与 cone | 平衡 cut 优化较复杂 | MFFC、逻辑优化 |
 | timing graph | pin / arc | timing arc | 适合 STA 约束 | 与 cell/net 分割需映射 | 关键路径保护 |
 
@@ -149,19 +154,114 @@ TritonPart/OpenROAD `par` 的价值在于它把 VLSI 分割从普通 min-cut 推
 | KaHyPar | 超图分割 | n-level / multilevel，cut 与 λ-1 | 开源、高质量 | C++/Python 依赖需验证 | 中期推荐 |
 | Mt-KaHyPar | 并行图/超图分割 | 多线程可扩展 | 大规模更合适 | 参数与构建复杂 | 大设计推荐 |
 | TritonPart / OpenROAD par | VLSI constraint-driven 分割 | timing / embedding / constraints | 更贴近 EDA 落地 | 依赖 OpenROAD 生态 | 生产路线重点 |
-| 自研 Python demo | 教学/验证 | 解析简化 netlist、输出分区/子网表 | 轻、可控、可改 | 非生产质量 | 本次交付 |
+| 自研 Python baseline | 教学/验证 | 解析简化 netlist、输出分区/子网表 | 轻、可控、可改 | 非生产质量 | 作为对照基线 |
 
-## 6. Timing 保护与 Slack 恢复策略
+## 6. 分割后的 SDC、STA 与并行优化流程
 
-推荐把 timing-driven 分割拆成 5 个工程层次：
+netlistOpt 不能只做结构分割。真实优化过程依赖 SDC 与 STA：SDC 定义时钟、例外路径、I/O delay、设计规则约束；STA 计算 AAT、RAT、slack，用于判断每个优化操作是否真正改善 timing。因此，分割后的每个 partition 都需要一份派生约束，并且局部 STA 结果必须最终回到全局 STA 中签核。
 
-1. **静态权重层**：依据 net fanout、cell type、是否在 timing-critical list 中设置 hyperedge weight。
-2. **路径保护层**：对低 slack path 上连续 cell 加 group constraint 或 high affinity。
-3. **边界预算层**：跨区边界 pin 记录 arrival/required/slack budget，局部优化不得消耗超过阈值。
-4. **合并修复层**：并行优化后 merge，做 incremental STA，对 WNS/TNS 退化 path 触发 repair。
-5. **回退层**：若某分区导致 QoR 退化超过阈值，回滚该分区优化结果，或重新调整 k/权重。
+### 6.1 Partition SDC 的定义
 
-建议第一阶段先实现“关键 net 高权重 + cut critical nets 指标”，第二阶段接入真实 STA 后再做 path-level group。
+分割后每个子模块不应直接复用完整顶层 SDC，而应生成独立的 partition SDC：
+
+```text
+partition SDC =
+  顶层 SDC 中与该 partition 相关的约束子集
+  + 跨 partition 边界 timing budget
+  + 边界 slew/load/driving 信息
+  + mode/corner/clock/exception 映射信息
+```
+
+partition SDC 需要覆盖：
+
+- **时钟约束**：`create_clock`、`create_generated_clock`、clock latency、uncertainty、transition、propagated/ideal clock 状态。
+- **输入边界约束**：`set_input_delay -max/-min`、`set_input_transition`，必要时补 `set_driving_cell`。
+- **输出边界约束**：`set_output_delay -max/-min`、`set_load`。
+- **时序例外**：只映射确实落在 partition 内或穿过该 partition 的 `set_false_path`、`set_multicycle_path`、`set_min_delay`、`set_max_delay`。
+- **设计规则约束**：max slew、max capacitance、max fanout、dont_touch、dont_use。
+- **边界保护约束**：对 cut port、跨 partition net、clock gating、reset、scan 等结构限制过度优化，必要时只允许边界 buffer 或边界 sizing。
+
+所有 budget 必须按 `mode / corner / clock domain / rise-fall / setup-hold` 维度保存，不能把不同分析视图的 AAT/RAT 混用。
+
+### 6.2 输入边界：用 AAT 派生 set_input_delay
+
+当某条 cut net 的 driver 在其他 partition，sink 在当前 partition 时，当前 partition 看到的是一个输入端口。这个输入端口不是从 0 时刻到达，而是上游逻辑已经消耗了一部分 timing budget。
+
+统一采用全局 STA 坐标系。设边界点为 `p`，launch clock edge 为 `E_L`：
+
+```tcl
+set_input_delay  -clock BCLK -max  [expr AAT_late(p)  - E_L] [get_ports p]
+set_input_delay  -clock BCLK -min  [expr AAT_early(p) - E_L] [get_ports p]
+set_input_transition <slew_from_global_sta> [get_ports p]
+```
+
+- `-max` 用于 setup，表示外部到 partition 输入端的最晚到达时间。
+- `-min` 用于 hold，表示外部到 partition 输入端的最早到达时间。
+- `-min` 可能为负值，不能简单截断为 0。
+- 同一端口若受多个 clock/edge 约束，应生成 clock-specific 约束，并保留 rise/fall 维度。
+
+### 6.3 输出边界：用 RAT 派生 set_output_delay
+
+当某条 cut net 的 driver 在当前 partition，sink 在其他 partition 时，当前 partition 看到的是一个输出端口。这个输出端口需要为下游逻辑保留 required time。
+
+设 capture clock edge 为 `E_C`：
+
+```tcl
+set_output_delay -clock BCLK -max [expr E_C_setup - RAT_late(p)]  [get_ports p]
+set_output_delay -clock BCLK -min [expr E_C_hold  - RAT_early(p)] [get_ports p]
+set_load <downstream_boundary_load> [get_ports p]
+```
+
+- `-max` 用于 setup，使 partition 输出端 latest required time 等价于全局 `RAT_late`。
+- `-min` 用于 hold，使 partition 输出端 earliest allowed arrival time 等价于全局 `RAT_early`。
+- `E_C_setup` 与 `E_C_hold` 必须考虑 multicycle、generated clock 相位、clock latency、uncertainty，不能简单使用默认同周期边。
+- 输出 load 应来自下游 fanout pin capacitance、估算线载或已抽取 parasitic，而不是固定常数。
+
+### 6.4 局部 STA 与全局 STA 的关系
+
+完整 netlist、完整 SDC、Liberty、SPEF/估算 RC 下的全局 STA 负责计算真实 timing graph：
+
+- `AAT_late`：setup 分析中从 startpoint 到边界/endpoint 的最大 arrival time。
+- `AAT_early`：hold 分析中从 startpoint 到边界/endpoint 的最小 arrival time。
+- `RAT_late`：setup 分析中 endpoint 或边界点允许的最晚 arrival time。
+- `RAT_early`：hold 分析中 endpoint 或边界点允许的最早 arrival time。
+- setup slack：`RAT_late - AAT_late`。
+- hold slack：`AAT_early - RAT_early`。
+
+局部 STA 使用 partition SDC 重建近似 timing 环境。它的作用是快速筛选 gate sizing、buffer insertion、clone、rewriting、repair_timing 等候选优化，不能替代最终全局 STA。所有 partition ECO 合并后，必须重新读取完整顶层 SDC 和全局 parasitic，执行全局 STA 签核。
+
+### 6.5 并行优化闭环
+
+推荐工程流程：
+
+1. **全局基线 STA**：读取完整 netlist、Liberty、顶层 SDC、SPEF/估算 RC，生成 `report_checks`、`report_wns`、`report_tns`，确认 unconstrained path 为 0。
+2. **边界抽取**：枚举 cut net、boundary port、跨 partition path、clock domain、fanout load、input slew、AAT/RAT、exception 命中关系。
+3. **SDC 分派**：为每个 partition 生成独立 SDC，并记录每条约束来自顶层 SDC 还是 timing budget，保证可追溯。
+4. **partition 并行优化**：各 partition 独立运行 STA 与优化。典型操作包括修复 slew/cap/fanout、setup、hold。每轮变更后用增量 STA 更新 WNS/TNS 与边界 delta。
+5. **merge**：合并所有 partition netlist/ECO，保持边界命名与连接一致，重建全局 timing graph。
+6. **merge 后验证与修复**：若出现新增 violation，优先在边界附近做小范围 repair；若跨 partition path 大面积恶化，回滚对应 partition ECO 或重新分配 budget。
+7. **rollback**：每个 partition 优化产物必须带版本号、timing 摘要、面积/功耗变化、边界 AAT/RAT delta。超过阈值的 partition 可以单独回滚，不影响其他 partition 结果。
+
+### 6.6 关键风险
+
+| 风险 | 说明 | 处理建议 |
+| --- | --- | --- |
+| false path / multicycle path 映射错误 | 映射过宽会隐藏真实 violation，映射过窄会造成过约束 | exception 必须按 from/to/through 和 setup/hold 维度精确裁剪 |
+| generated clock 丢失 | 局部模块可能看不到 clock source 与 phase 关系 | 保留 generated clock 定义；必要时转换为 virtual clock 并加 margin |
+| clock reconvergence | 局部 STA 看不到共同 clock path，CRPR/CPPR 可能失真 | 用 latency/uncertainty guardband 补偿，并在全局 STA 中复核 |
+| high fanout net 被切 | clock/reset/scan/enable 等 net 会主导 cut 和 load | 分割时单独降权/固定/分组，优化时限制边界结构变化 |
+| boundary load/slew 偏乐观 | 局部优化结果 merge 后 timing 可能恶化 | 对边界 load/slew 加 guardband，并记录实际 delta |
+| cross-partition path 失真 | 局部 STA 看不到完整路径 | merge 后专门检查 top N critical cross-partition paths |
+
+### 6.7 验收指标
+
+- 约束覆盖：全局与 partition STA 均无 unconstrained endpoint；生产化验收目标是顶层 SDC 子集映射全部可追溯。
+- 时序收敛：merge 后 setup/hold WNS 达到目标，TNS 不劣化或满足预设改善目标。
+- 边界精度：merge 后实际 boundary AAT/RAT 与 budget 偏差不超过设定阈值，例如 `<= 20ps` 或 `<= 5% budget`。
+- 设计规则：max slew、max cap、max fanout violation 达到签核目标，或不超过签核前 repair 阈值。
+- 跨 partition 路径：top N critical cross-partition paths 均经过全局 STA 复核，无被 false/multicycle 误屏蔽路径。
+- QoR 控制：面积、功耗、buffer 数量、cell resizing 数量不超过 partition 配额。
+- 工程效率：partition 并行优化 wall time 相比全局串行优化有明确下降，且 rollback 次数、重跑次数可统计。
 
 ## 7. netlistOpt 推荐流程
 
@@ -193,13 +293,16 @@ TritonPart/OpenROAD `par` 的价值在于它把 VLSI 分割从普通 min-cut 推
   merge -> incremental STA -> violation repair -> QoR compare
 ```
 
-## 8. Demo 设计
+## 8. 实验设计
 
-本次最终交付包含两个层次的 demo：
+实验包含两个层次：
 
-1. **经典/调研工具 demo：`classic_partition_demo.py`**
+1. **主流工具实验：`classic_partition_demo.py`**
    - 真实调用 KaHyPar Python binding，使用官方 `km1_kKaHyPar_sea20.ini` / `cut_kKaHyPar_sea20.ini` 配置；
-   - 导出 hMETIS `.hgr`、cell/net 映射表，并生成 OpenROAD Partition Manager / TritonPart Tcl；
+   - 导出 hMETIS `.hgr`、cell/net 映射表，并真实调用 OpenROAD Partition Manager / TritonPart；
+   - 将超图投影为 weighted graph，并真实调用 METIS `gpmetis`；
+   - 真实编译并调用 Mt-KaHyPar CLI，直接读取 hMETIS `.hgr` 超图输入；
+   - 真实调用 PaToH v3.3 standalone CLI，使用 PaToH `.u` 输入格式并读取官方 `.part.K` 输出；
    - 用 PyTorch 实现一个小型 GCN-style partitioner，复现 CircuitPartitioning-GNN 的“图神经网络 + cut/balance loss”思路；
    - 实现 GL0AM-style logic cone grouping，复现其按逻辑 cone 分块映射 GPU block 的策略；
    - 增加 Louvain community pre-clustering 作为社区发现/预聚类 baseline。
@@ -211,7 +314,8 @@ TritonPart/OpenROAD `par` 的价值在于它把 VLSI 分割从普通 min-cut 推
 运行方式：
 
 ```bash
-PYTHONPATH=.tooling/python python3 classic_partition_demo.py --input sample_netlist.v --k 4 --backend all --out classic_results
+PYTHONPATH=.tooling/python python3 classic_partition_demo.py --input sample_netlist.v --k 4 --backend all --out classic_results --run-openroad
+python3 netlist_split_demo.py --input sample_netlist.v --k 2 --algo all --out results_k2
 python3 netlist_split_demo.py --input sample_netlist.v --k 4 --algo all --out results_k4
 PYTHONPATH=.tooling/python python3 -m unittest -v
 ```
@@ -219,44 +323,88 @@ PYTHONPATH=.tooling/python python3 -m unittest -v
 当前环境说明：
 
 - KaHyPar：已通过本地 `.tooling/python` Python binding 真实运行。
-- OpenROAD/TritonPart：当前机器未安装 `openroad` 可执行文件，因此本 demo 生成可复现 Tcl 和 `.hgr` 输入；在装有 OpenROAD 的机器上可直接执行。
+- OpenROAD/TritonPart：已在无 sudo 环境下从 GitHub release `.deb` 用户态解包到 `.tooling/openroad_extracted/`，并补齐本地动态库路径后真实运行 `triton_part_hypergraph`。官方 VaultLink 上存在更新的 Ubuntu 24.04 预编译包，但下载接口需要邮件注册授权，未做无交互下载。
+- METIS：已从 Ubuntu apt 仓库下载 `metis` 包并用户态解包，真实运行 `.tooling/metis_extracted/usr/bin/gpmetis`。
+- Mt-KaHyPar：已从 GitHub 源码 clone，使用 GCC 13、`-DKAHYPAR_DOWNLOAD_TBB=On` 编译 `MtKaHyPar` CLI，并真实运行。
+- PaToH：已从官方页面下载 Linux x86_64 binary distribution，真实运行 standalone `patoh`。PaToH binary 可用于 demo/research 验证；商业或产品化使用需要单独确认 commercial license。
+- hMETIS：根据 UMN Technology Commercialization 页面说明，hMETIS 当前属于 non-open、fee-based 工具，需要 License/Sponsored research/Co-development 授权流程；未使用非官方 binary，因此未做真实运行。
+- ABKGroup/TritonPart standalone：仓库为 BSD-3-Clause 开源，仓库 license 本身未形成阻塞。已 clone 仓库并完成 CMake 配置；standalone `openroad` target 编译在 FastRoute 与当前 `fmt/spdlog` 版本组合处失败，未生成可执行文件，因此 standalone 仓库未完成真实运行。OpenROAD 集成版 `src/par` 已真实运行，结果见 9.1；standalone 构建日志见 `.tooling/src/TritonPart/openroad_build.log`。
 - CircuitPartitioning-GNN：未直接 vendoring 原仓库代码；本 demo 用 PyTorch 复现其 GNN partitioning 思路，用于小网表可运行验证。
 - GL0AM：GL0AM 本身是 GPU gate-level simulator，不是单独 partitioner；本 demo 复现其 README 中描述的 logic-cone grouping 分块策略。
 
 ## 9. Demo 实验结果
 
-> 本节由 `classic_partition_demo.py` 和 `netlist_split_demo.py` 实际运行结果生成/校验。小型 demo 的指标用于比较算法趋势，不代表生产级 QoR。
+> 本节由 `classic_partition_demo.py` 和 `netlist_split_demo.py` 实际运行结果生成/校验。小型 demo 的指标用于比较算法趋势，不代表生产化 QoR。
 
 ### 9.1 经典/调研工具 demo 结果
 
 | Benchmark | Backend | Tool Reality | k | Cells | Nets | Cut Nets | λ-1 | Balance Max/Avg | Runtime ms | Notes |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| sample_netlist.v | KaHyPar | 真实 Python binding | 4 | 14 | 21 | 8 | 11 | 1.14 | 3.591 | `km1_kKaHyPar_sea20.ini` |
-| sample_netlist.v | OpenROAD/TritonPart | 生成 `.hgr` + Tcl，当前环境未安装 `openroad` | 4 | 14 | 21 | - | - | - | - | `classic_results/openroad_tritonpart/run_tritonpart_hypergraph.tcl` |
-| sample_netlist.v | CircuitGNN-style | PyTorch GCN 思路复现 | 4 | 14 | 21 | 12 | 17 | 1.14 | 711.183 | 小数据上训练不占优，仅验证 GNN 流程 |
-| sample_netlist.v | GL0AM-cone-style | logic cone 分块策略复现 | 4 | 14 | 21 | 11 | 16 | 1.14 | 0.084 | 适合 simulator block grouping，不以 min-cut 为唯一目标 |
-| sample_netlist.v | Louvain precluster | NetworkX 社区发现 baseline | 4 | 14 | 21 | 9 | 10 | 1.14 | 1.530 | 可作为多级 coarsening/预聚类输入 |
+| sample_netlist.v | KaHyPar | 真实 Python binding | 4 | 14 | 21 | 8 | 11 | 1.14 | 5.422 | `km1_kKaHyPar_sea20.ini` |
+| sample_netlist.v | OpenROAD/TritonPart | 真实 OpenROAD `par` 运行 | 4 | 14 | 21 | 10 | 14 | 1.14 | 387.052 | `v2.0-17198-g8396d0866` |
+| sample_netlist.v | METIS | 真实 `gpmetis` 运行 | 4 | 14 | 21 | 7 | 9 | 1.14 | 5.581 | hypergraph projected to weighted graph |
+| sample_netlist.v | Mt-KaHyPar | 真实 `MtKaHyPar` CLI 运行 | 4 | 14 | 21 | 8 | 8 | 1.14 | 38.096 | hMETIS `.hgr`，`objective=km1`，2 threads |
+| sample_netlist.v | PaToH | 真实 `patoh` CLI 运行 | 4 | 14 | 21 | 8 | 8 | 1.14 | 2.895 | PaToH `.u`，`UM=O` connectivity-1 metric |
+| sample_netlist.v | CircuitGNN-style | PyTorch GCN 思路复现 | 4 | 14 | 21 | 12 | 17 | 1.14 | 854.831 | 小数据上训练不占优，仅验证 GNN 流程 |
+| sample_netlist.v | GL0AM-cone-style | logic cone 分块策略复现 | 4 | 14 | 21 | 11 | 16 | 1.14 | 0.081 | 适合 simulator block grouping，不以 min-cut 为唯一目标 |
+| sample_netlist.v | Louvain precluster | NetworkX 社区发现 baseline | 4 | 14 | 21 | 9 | 10 | 1.14 | 1.928 | 可作为多级 coarsening/预聚类输入 |
 
 实验解读：
 
-- KaHyPar 是本次 demo 中真正调用的主流超图分割器，在 k=4 上 cut nets=8，是 classic demo 中 cut-net 最优。
-- OpenROAD/TritonPart 已完成输入与脚本生成；由于当前环境没有 `openroad` 二进制，未执行实际 partition。脚本使用 `triton_part_hypergraph -hypergraph_file ... -num_parts 4 ...`，和 OpenROAD `par` 文档一致。
+- KaHyPar 是主流超图分割器，在 k=4 上 cut nets=8、λ-1=11，结果较均衡。
+- OpenROAD/TritonPart 已完成实际运行。安装方式为：下载 GitHub release `openroad_2.0-17198-g8396d0866_amd64-ubuntu-22.04.deb`，用 `dpkg-deb -x` 解包到 `.tooling/openroad_extracted/`，再用本地 `LD_LIBRARY_PATH` 补齐 `libortools`、`tcl-tclreadline`、`libQt5Charts`、`libpython3.10`。本机执行的版本为 `v2.0-17198-g8396d0866`。
+- OpenROAD `par` 对本样例生成 `classic_results/openroad_tritonpart/demo_top.hgr.part.4`，根据该 solution 文件回算 cut nets=10、λ-1=14。日志见 `classic_results/openroad_tritonpart/openroad_run.log`。
+- METIS 对超图投影后的 weighted graph 运行 `gpmetis -ptype=rb`，cut nets=7、λ-1=9。由于 METIS 优化的是 graph edgecut，不是原生 hypergraph cut-net，结果只能作为 graph baseline 与预聚类参考，不能直接替代 KaHyPar/TritonPart 的超图目标。
+- Mt-KaHyPar 已完成源码编译和真实 CLI 运行。第一次构建使用默认编译器时遇到 LTO 版本不匹配，切换 GCC 13 并关闭 IPO 后构建通过；CLI 直接读取 `classic_results/mt_kahypar/demo_top.hgr`，生成 `demo_top.hgr.part4.epsilon0.03.seed7.KaHyPar`，回算 cut nets=8、λ-1=8。
+- PaToH 已完成官方 binary 真实运行。demo 将 hMETIS 超图转换为 PaToH `.u` 格式，执行 `patoh demo_top.u 4 UM=O PQ=D WI=1`，生成 `demo_top.u.part.4`，回算 cut nets=8、λ-1=8。日志提示 balance not tight enough；本样例实际分区为 4/3/4/3，作为对照实验可接受，后续可调 imbalance / 多约束参数。PaToH 可用于 demo/research 验证，商业或产品化使用需单独确认授权。
+- hMETIS 未真实运行。原因不是技术接口缺失，而是当前官方渠道将 hMETIS 定位为 non-open、fee-based 工具，需要向 UMN 走 License/Sponsored research/Co-development 授权流程；本实验未使用未授权二进制。许可证证据记录见 `classic_results/license_evidence.md`。
+- ABKGroup/TritonPart standalone 未真实运行。CMake 已通过，最终在 `src/grt/src/fastroute/src/utility.cpp` 编译失败，错误为 `fmt` 9 对 `grt::RouteType` 参数缺少 formatter specialization。该问题属于老 standalone OpenROAD/TritonPart 与当前系统依赖版本不兼容，不是商业授权限制；若需要继续推进，建议使用仓库年代匹配的 Ubuntu 20.04/22.04 容器或固定旧版 `fmt/spdlog` 依赖。构建日志见 `.tooling/src/TritonPart/openroad_build.log`，状态记录见 `classic_results/tritonpart_standalone/status.json`。
 - GNN-style demo 证明图神经网络分割流程可跑，但在 14-cell 小样例上没有质量优势；GNN 类方法需要更多训练样本和 benchmark 才有意义。
 - GL0AM-style cone grouping 的目标更偏 GPU simulation locality，而不是单纯 min-cut；cut 较高是可解释的。
-- Louvain precluster 能快速找到社区结构，可作为 KaHyPar/TritonPart coarsening guide，而不是最终生产级约束分割器。
+- Louvain precluster 能快速找到社区结构，可作为 KaHyPar/TritonPart coarsening guide，而不是最终生产化约束分割器。
 
 ### 9.2 轻量 baseline demo 结果
 
 | Benchmark | Algorithm | k | Cells | Nets | Cut Nets | λ-1 | Balance Max/Avg | Runtime ms | Estimated Parallel Speedup |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| sample_netlist.v | random | 2 | 14 | 21 | 9 | 9 | 1.00 | 0.065 | 1.52x |
-| sample_netlist.v | greedy | 2 | 14 | 21 | 8 | 8 | 1.00 | 0.406 | 1.55x |
-| sample_netlist.v | fm | 2 | 14 | 21 | 8 | 8 | 1.00 | 0.394 | 1.55x |
-| sample_netlist.v | multilevel | 2 | 14 | 21 | 8 | 8 | 1.00 | 0.536 | 1.55x |
-| sample_netlist.v | random | 4 | 14 | 21 | 10 | 13 | 1.14 | 0.079 | 1.82x |
-| sample_netlist.v | greedy | 4 | 14 | 21 | 9 | 10 | 1.14 | 0.297 | 1.90x |
-| sample_netlist.v | fm | 4 | 14 | 21 | 9 | 10 | 1.14 | 1.776 | 1.90x |
-| sample_netlist.v | multilevel | 4 | 14 | 21 | 8 | 9 | 1.14 | 8.523 | 1.99x |
+| sample_netlist.v | random | 2 | 14 | 21 | 9 | 9 | 1.00 | 0.050 | 1.52x |
+| sample_netlist.v | greedy | 2 | 14 | 21 | 8 | 8 | 1.00 | 0.277 | 1.55x |
+| sample_netlist.v | fm | 2 | 14 | 21 | 8 | 8 | 1.00 | 0.439 | 1.55x |
+| sample_netlist.v | multilevel | 2 | 14 | 21 | 8 | 8 | 1.00 | 0.456 | 1.55x |
+| sample_netlist.v | random | 4 | 14 | 21 | 10 | 13 | 1.14 | 0.053 | 1.82x |
+| sample_netlist.v | greedy | 4 | 14 | 21 | 9 | 10 | 1.14 | 0.242 | 1.90x |
+| sample_netlist.v | fm | 4 | 14 | 21 | 9 | 10 | 1.14 | 1.809 | 1.90x |
+| sample_netlist.v | multilevel | 4 | 14 | 21 | 8 | 9 | 1.14 | 3.228 | 1.99x |
+
+`Estimated Parallel Speedup` 不是实测 wall-time 加速，而是 demo 中的启发式估算值，用于观察 cut/balance 对并行收益的影响。公式来自 `netlist_split_demo.py`：
+
+```text
+serial_fraction = min(0.95, 0.05 + 0.03 * cut_net_count)
+balance_penalty = max(1.0, balance_max_over_avg)
+estimated_speedup = k / (1.0 + serial_fraction * (k - 1) + (balance_penalty - 1.0))
+```
+
+含义：
+
+- `0.05` 表示固定串行开销，例如任务调度、分区读写、merge、全局检查；
+- `0.03 * cut_net_count` 表示跨分区 net 越多，边界约束、通信、合并修复成本越高；
+- `balance_penalty` 表示分区不均衡会让最大分区拖慢并行 wall time；
+- 因此该列是评估计算值，不是 OpenROAD/STA/netlistOpt 真实运行数据。
+
+列头含义：
+
+| 列名 | 含义 |
+| --- | --- |
+| Benchmark | 输入网表文件 |
+| Algorithm | 使用的轻量 baseline 算法 |
+| k | 请求分区数 |
+| Cells | 被分割的 cell/instance 数量，`assign` 也作为一个 cell 处理 |
+| Nets | netlist 中参与建模的 net 数量 |
+| Cut Nets | 跨越两个或更多 partition 的 net 数量 |
+| λ-1 | connectivity metric；一个 net 跨越 λ 个 partition，则贡献 λ-1 |
+| Balance Max/Avg | 最大分区 cell 数 / 平均分区 cell 数，越接近 1 越均衡 |
+| Runtime ms | 该 demo 算法自身的 Python 运行时间，不包含真实优化/STA |
+| Estimated Parallel Speedup | 基于 cut nets 和 balance 的并行收益估算，不是实测加速 |
 
 实验解读：
 
@@ -300,9 +448,9 @@ PYTHONPATH=.tooling/python python3 -m unittest -v
 - 引入 multi-dimensional weight：cell area、FF/LUT/DSP 或 stdcell class、timing load。
 - 建立分割后并行优化 stub：每个分区独立跑局部优化脚本，merge 后跑全局检查。
 
-验收：真实设计上获得可观 wall-time 降低，且 WNS/TNS/area/power 退化在可控阈值内。
+验收：在真实设计上量化 wall-time 变化，并将 WNS/TNS/area/power 变化控制在预设阈值内。
 
-### 6 个月以上：生产级 timing-driven netlistOpt
+### 6 个月以上：生产化 timing-driven netlistOpt
 
 - 接入增量 STA，形成 path-level slack budget。
 - 关键路径 group constraint 与边界 repair 自动化。
@@ -310,7 +458,7 @@ PYTHONPATH=.tooling/python python3 -m unittest -v
 - 建立分区参数自动调优：k、imbalance、critical weight、max boundary ratio。
 - 与现有优化器闭环：失败回滚、局部重分割、QoR gate。
 
-验收：在多设计、多 corner、多 PVT 条件下稳定收益，形成默认可开启的 netlistOpt 并行优化模式。
+验收：在多设计、多 corner、多 PVT 条件下量化收益与风险，评估是否具备默认开启的 netlistOpt 并行优化条件。
 
 ## 12. 风险与对策
 
@@ -326,52 +474,47 @@ PYTHONPATH=.tooling/python python3 -m unittest -v
 ## 13. 一页纸结论
 
 1. 网表分割应优先采用超图模型，普通图只适合 baseline 和轻量 demo。
-2. KL/FM 是理解和实现 refinement 的基础；生产级应采用多级超图分割框架。
+2. KL/FM 是理解和实现 refinement 的基础；生产化路线应采用多级超图分割框架。
 3. KaHyPar/Mt-KaHyPar 适合作为开源高质量 backend；TritonPart/OpenROAD `par` 更贴近 EDA 约束驱动落地。
 4. 对 netlistOpt 来说，单纯 min-cut 不够，必须引入 timing criticality、MFFC/logic cone、cell weight、边界 slack budget。
 5. 分区后并行优化的真正验收标准不是 cut 最小，而是 wall-time 降低与 PPA/QoR 退化可控。
 
-## 14. 质量质检报告
+## 14. 实验复现与质量检查
 
-### 14.1 系统总览
-
-本次压缩执行采用以下 Agent 协作：
-
-| Agent | 职责 | 产出 |
-| --- | --- | --- |
-| PM/架构 Agent | 将 14 天计划压缩为 2 天交付路线，定义验收物 | 报告结构、Demo 验收标准、路线图 |
-| 调研 Agent | 调研 graph/hypergraph、KL/FM/谱/多级/社区发现/timing-driven | 算法与工具对比、参考资料 |
-| Demo 编码 Agent | 实现经典工具 demo 与轻量 baseline | `classic_partition_demo.py`、`netlist_split_demo.py`、`sample_netlist.v`、`README.md` |
-| 集成/QA Agent | 跑单测和示例实验，补齐输出目录能力 | `classic_results/`、`results_k2/`、`results_k4/`、真实实验表 |
-| 评审/安全 Agent | 检查依赖、可复现性、风险边界 | 最终签字结论 |
-
-### 14.2 QA 测试结果
+### 14.1 复现命令
 
 已执行：
 
 ```bash
 PYTHONPATH=.tooling/python python3 -m unittest -v
-PYTHONPATH=.tooling/python python3 classic_partition_demo.py --input sample_netlist.v --k 4 --backend all --out classic_results
+PYTHONPATH=.tooling/python python3 classic_partition_demo.py --input sample_netlist.v --k 4 --backend all --out classic_results --run-openroad
 python3 netlist_split_demo.py --input sample_netlist.v --k 2 --algo all --out results_k2
 python3 netlist_split_demo.py --input sample_netlist.v --k 4 --algo all --out results_k4
 ```
 
+### 14.2 验证结果
+
 结果：
 
-- 单元测试：`Ran 6 tests ... OK`
+- 单元测试：`Ran 11 tests ... OK`
 - KaHyPar：真实 Python binding 运行成功，k=4 时 cut nets=8、λ-1=11。
-- OpenROAD/TritonPart：`.hgr` 与 Tcl 脚本生成成功；当前环境未安装 `openroad`，未本机执行。
+- OpenROAD/TritonPart：本地用户态 OpenROAD 运行成功，k=4 时 cut nets=10、λ-1=14，日志见 `classic_results/openroad_tritonpart/openroad_run.log`。
+- METIS：真实 `gpmetis` 运行成功，k=4 时 cut nets=7、λ-1=9。
+- Mt-KaHyPar：源码编译后的 `MtKaHyPar` CLI 真实运行成功，k=4 时 cut nets=8、λ-1=8，日志见 `classic_results/mt_kahypar/mtkahypar.log`。
+- PaToH：官方 binary `patoh` 真实运行成功，k=4 时 cut nets=8、λ-1=8，日志见 `classic_results/patoh/patoh.log`；商业使用需单独确认授权。
+- hMETIS：未真实运行，原因是官方发布渠道为 non-open、fee-based 授权模式，不适合在未授权状态下纳入 demo。
+- ABKGroup/TritonPart standalone：未真实运行。CMake 已通过，`openroad` target 编译在 FastRoute 与当前 `fmt/spdlog` 版本不兼容处失败；OpenROAD 集成版 `src/par` 已真实运行并可作为 TritonPart 工程路线验证。
 - CircuitGNN-style / GL0AM-cone-style / Louvain baseline：均运行成功并生成 `metrics.json`、`partitions.tsv`、子网表骨架。
 - k=2 示例：4 个算法全部运行成功，生成 8 个子网表文件。
 - k=4 示例：4 个算法全部运行成功，生成 16 个子网表文件。
-- 依赖状态：baseline demo 无第三方依赖；classic demo 使用本地 `.tooling/python/kahypar`、系统已有 `torch` 与 `networkx`。
+- 依赖状态：baseline demo 无第三方依赖；classic demo 使用本地 `.tooling/python/kahypar`、`.tooling/metis_extracted`、`.tooling/openroad_extracted`、`.tooling/src/mt-kahypar/build_gcc13`、`.tooling/patoh_extracted`，以及系统已有 `torch` 与 `networkx`。
 
-### 14.3 评审签字结论
+### 14.3 实验结论
 
-- **功能完整性**：通过。Demo 已覆盖 netlist 解析、hMETIS/KaHyPar 超图导出、真实 KaHyPar 分割、OpenROAD/TritonPart Tcl 生成、GNN-style 分割、GL0AM-style cone grouping、指标输出、结果目录与子网表骨架生成。
-- **报告完整性**：通过。已覆盖背景、问题定义、主流算法、工具对比、timing 保护、并行优化流程、实验结果、路线图和风险。
-- **工程风险**：可接受。当前 demo 不承诺生产级 Verilog 完整解析或真实 STA QoR；OpenROAD/TritonPart 需要在安装 OpenROAD 的环境中执行；这些已在路线图中列为中长期工作。
-- **最终结论**：可以作为 netlistOpt 图分割方向的 2 天压缩交付版本，用于内部技术评审和后续 PoC 立项。
+- 代码已覆盖 netlist 解析、hMETIS `.hgr` 格式导出、KaHyPar/Mt-KaHyPar 超图输入导出、PaToH `.u` 导出、真实 KaHyPar 分割、真实 OpenROAD/TritonPart hypergraph 分割、真实 METIS graph 分割、真实 Mt-KaHyPar 分割、真实 PaToH 分割、GNN-style 分割、GL0AM-style cone grouping、指标输出、结果目录与子网表骨架生成。
+- 报告已覆盖背景、问题定义、主流算法、工具对比、SDC/STA 边界约束、并行优化流程、实验结果、路线图和风险。
+- 当前 demo 不承诺生产化 Verilog 完整解析或真实 STA QoR；OpenROAD 使用的是可无注册下载的旧 GitHub release，更新的 26Q2 Ubuntu 24.04 包需要 VaultLink 邮件授权。
+- 下一阶段重点应放在真实 benchmark、真实 SDC/SPEF、partition SDC generator、局部 STA/优化 wrapper 与 merge 后全局 STA 验证。
 
 ## 15. 参考链接
 
@@ -382,6 +525,8 @@ python3 netlist_split_demo.py --input sample_netlist.v --k 4 --algo all --out re
 - https://kahypar.org/
 - https://github.com/kahypar/kahypar
 - https://github.com/kahypar/mt-kahypar
+- https://faculty.cc.gatech.edu/~umit/PaToH/manual.pdf
+- https://license.umn.edu/product/hmetis-version-15
 - https://karypis.github.io/glaros/files/sw/hmetis/manual.pdf
 - https://dl.acm.org/doi/10.5555/800263.809204
 - https://ieeexplore.ieee.org/document/6771089/

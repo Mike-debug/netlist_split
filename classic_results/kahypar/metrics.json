@@ -22,7 +22,7 @@
   "module": "demo_top",
   "nets": 21,
   "objective": "km1",
-  "runtime_ms": 3.590955981053412,
+  "runtime_ms": 5.421927024144679,
   "sizes": [
     4,
     3,

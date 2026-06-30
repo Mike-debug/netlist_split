@@ -1,0 +1,34 @@
+{
+  "algorithm": "openroad_tritonpart",
+  "cells": 14,
+  "cut_count": 10,
+  "cut_nets": [
+    "clk",
+    "n2",
+    "n3",
+    "n6",
+    "n7",
+    "n8",
+    "q1",
+    "q2",
+    "q3",
+    "q4"
+  ],
+  "estimated_speedup": 1.8241042345276874,
+  "imbalance": 1.1428571428571428,
+  "lambda_minus_one": 14,
+  "module": "demo_top",
+  "nets": 21,
+  "note": "Metrics are computed from the OpenROAD-generated .hgr.part.k solution file.",
+  "openroad_exe": "/home/caesar/ccode/netlist_split/.tooling/openroad_extracted/usr/bin/openroad",
+  "openroad_version": "v2.0-17198-g8396d0866",
+  "runtime_ms": 387.0521050412208,
+  "sizes": [
+    4,
+    4,
+    4,
+    2
+  ],
+  "solution_file": "/home/caesar/ccode/netlist_split/classic_results/openroad_tritonpart/demo_top.hgr.part.4",
+  "tool": "OpenROAD Partition Manager / TritonPart"
+}

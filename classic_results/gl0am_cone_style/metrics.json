@@ -102,7 +102,7 @@
   "module": "demo_top",
   "nets": 21,
   "note": "GL0AM itself is a GPU simulator; this reproduces the logic-cone grouping strategy described by the project.",
-  "runtime_ms": 0.08352100849151611,
+  "runtime_ms": 0.08068501483649015,
   "sizes": [
     4,
     4,

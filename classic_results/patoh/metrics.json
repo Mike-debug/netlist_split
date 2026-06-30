@@ -1,0 +1,42 @@
+{
+  "algorithm": "patoh",
+  "cells": 14,
+  "command": [
+    "/home/caesar/ccode/netlist_split/.tooling/patoh_extracted/build/Linux-x86_64/patoh",
+    "/home/caesar/ccode/netlist_split/classic_results/patoh/demo_top.u",
+    "4",
+    "UM=O",
+    "PQ=D",
+    "WI=1"
+  ],
+  "cut_count": 8,
+  "cut_nets": [
+    "clk",
+    "n2",
+    "n4",
+    "n5",
+    "n7",
+    "q1",
+    "q2",
+    "q3"
+  ],
+  "estimated_speedup": 1.9872249822569201,
+  "imbalance": 1.1428571428571428,
+  "lambda_minus_one": 8,
+  "license_note": "Official PaToH binary is free for non-commercial research use; commercial use requires a license.",
+  "log_tail": "\n+++++++++++++++++++++++++++++++++++++++++++++++++++++++\n+++ PaToH v3.3 (c) Nov 1999-, by  Umit V. Catalyurek\n+++ Build Date: Wed Jul 15 00:24:52 2020 -0400\n+++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n********************************************************************************\nHypergraph : /home/caesar/ccode/netlist_split/classic_results/patoh/demo_top.u   #Cells :    14   #Nets :    13   #Pins :    33\n********************************************************************************\n 4-way partitioning results of PaToH:\n\n 'Con - 1' Cost:     8\n Part Weights   : Min=          3 (0.143) Max=          4 (0.143)\n---- BALANCE IS NOT TIGHT ENOUGH ----\n--------------------------------------------------------------------------------\nI/O          :       0.000 sec\nI.Perm/Cons.H:       0.000 sec  ( 0.3%)\nCoarsening   :       0.000 sec  ( 0.4%)\nPartitioning :       0.001 sec  (80.0%)\nUncoarsening :       0.000 sec  (13.8%)\nTotal        :       0.001 sec\nTotal (w I/O):       0.001 sec\n--------------------------------------------------------------------------------\n\n",
+  "module": "demo_top",
+  "nets": 21,
+  "objective": "connectivity-1",
+  "patoh_exe": "/home/caesar/ccode/netlist_split/.tooling/patoh_extracted/build/Linux-x86_64/patoh",
+  "patoh_file": "/home/caesar/ccode/netlist_split/classic_results/patoh/demo_top.u",
+  "runtime_ms": 2.8948200051672757,
+  "sizes": [
+    4,
+    3,
+    4,
+    3
+  ],
+  "solution_file": "/home/caesar/ccode/netlist_split/classic_results/patoh/demo_top.u.part.4",
+  "tool": "PaToH standalone CLI"
+}

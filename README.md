@@ -3,7 +3,7 @@
 This directory contains two demos:
 
 - `classic_partition_demo.py`: tool-backed demo for the researched algorithms
-  and projects: real KaHyPar, OpenROAD/TritonPart script generation,
+  and projects: real KaHyPar, OpenROAD/TritonPart, METIS, Mt-KaHyPar, PaToH,
   CircuitPartitioning-GNN-style PyTorch partitioning, GL0AM-style logic-cone
   grouping, and Louvain pre-clustering.
 - `netlist_split_demo.py`: lightweight standard-library baseline for comparing
@@ -29,11 +29,24 @@ PYTHONPATH=.tooling/python python3 classic_partition_demo.py \
   --input sample_netlist.v --k 4 --backend all --out classic_results
 ```
 
+Run OpenROAD/TritonPart as well, using the local user-space OpenROAD unpacked
+under `.tooling/openroad_extracted`:
+
+```bash
+PYTHONPATH=.tooling/python python3 classic_partition_demo.py \
+  --input sample_netlist.v --k 4 --backend openroad --out classic_results --run-openroad
+```
+
 Backends:
 
 - `kahypar`: real KaHyPar Python binding, using `classic_configs/*.ini`
 - `openroad`: generates hMETIS `.hgr` and OpenROAD/TritonPart Tcl under
-  `classic_results/openroad_tritonpart/`; runs it only if `openroad` exists
+  `classic_results/openroad_tritonpart/`; runs it if `openroad` exists on
+  `PATH`, `OPENROAD_EXE`, or `.tooling/openroad_extracted/usr/bin/openroad`
+- `metis`: projects the netlist hypergraph to a weighted graph and runs real
+  `gpmetis`
+- `mtkahypar`: runs real `MtKaHyPar` on the exported hMETIS hypergraph
+- `patoh`: exports PaToH `.u` format and runs real standalone `patoh`
 - `gnn`: PyTorch GCN-style reproduction of the CircuitPartitioning-GNN idea
 - `gl0am`: GL0AM-style logic-cone grouping for GPU block style partitioning
 - `louvain`: NetworkX Louvain community pre-clustering baseline

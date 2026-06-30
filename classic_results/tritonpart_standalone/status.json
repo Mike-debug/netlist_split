@@ -1,0 +1,25 @@
+{
+  "tool": "ABKGroup/TritonPart standalone",
+  "repo": ".tooling/src/TritonPart",
+  "license": "BSD-3-Clause",
+  "cmake_status": "passed",
+  "build_status": "failed",
+  "run_status": "not_run",
+  "reason": "The standalone OpenROAD target did not produce an executable in this Ubuntu 24.04 user-space dependency setup.",
+  "build_log": ".tooling/src/TritonPart/openroad_build.log",
+  "license_scope": "Repository license checked as BSD-3-Clause; dependency licenses still need separate review before product use.",
+  "dependencies_resolved": [
+    "SWIG",
+    "Tcl headers",
+    "OR-Tools",
+    "spdlog/fmt",
+    "LEMON",
+    "Boost headers"
+  ],
+  "environment_fixes": [
+    "Set M4=/usr/bin/m4 to avoid a stale M4 environment variable",
+    "Forced Boost_INCLUDE_DIR to .tooling/tritonpart_deps_extract/usr/include instead of Anaconda Boost"
+  ],
+  "final_error_summary": "src/grt/src/fastroute/src/utility.cpp failed to compile with fmt 9: grt::RouteType has no formatter specialization.",
+  "recommended_next_step": "Build in an Ubuntu 20.04/22.04 container or pin fmt/spdlog to versions compatible with this older standalone OpenROAD/TritonPart snapshot."
+}

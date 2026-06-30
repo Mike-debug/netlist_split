@@ -1,0 +1,9 @@
+// Auto-generated demo sub-netlist for partition 1
+// Boundary/cut nets: clk, n7, q1, q3
+module demo_top_mt_kahypar_p1();
+  wire clk, n7, n8, q1, q3, q4, y;
+  ASSIGN assign_1 (.A1(q4), .A2(n7), .Y(y));
+  DFF u_ff2 (.CLK(clk), .D(n7), .Q(q3));
+  DFF u_ff3 (.CLK(clk), .D(n8), .Q(q4));
+  XOR2 u_xor0 (.A(q3), .B(q1), .Y(n8));
+endmodule

@@ -19,7 +19,7 @@
   "lambda_minus_one": 13,
   "module": "demo_top",
   "nets": 21,
-  "runtime_ms": 0.078729004599154,
+  "runtime_ms": 0.05283497739583254,
   "sizes": [
     4,
     4,

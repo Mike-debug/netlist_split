@@ -1,0 +1,41 @@
+# Python cache / local test artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local virtual environments
+.venv/
+venv/
+env/
+
+# Downloaded third-party tools, unpacked binaries, cloned external repos,
+# local build trees, and large dependency payloads used to reproduce experiments.
+.tooling/
+
+# Generic native build outputs
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+Makefile
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+
+netlist图分割方案实施计划.md

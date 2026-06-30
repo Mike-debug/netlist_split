@@ -7,6 +7,9 @@ research plan:
 
 * KaHyPar: real Python binding invocation when available.
 * OpenROAD/TritonPart: hMETIS hypergraph export + runnable Tcl script.
+* METIS: graph projection + real gpmetis invocation when available.
+* Mt-KaHyPar: real shared-memory hypergraph partitioner CLI invocation.
+* PaToH: real PaToH standalone CLI invocation when the binary is available.
 * CircuitPartitioning-GNN: a compact PyTorch GCN-style partitioning demo.
 * GL0AM: cone/block partitioning inspired by GL0AM's logic-cone grouping.
 
@@ -26,13 +29,12 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 import netlist_split_demo as base
 
 
 DRIVER_PINS = {"Y", "Z", "ZN", "Q", "QN", "O", "OUT"}
-DATA_PINS = {"A", "A1", "A2", "A3", "B", "C", "D", "IN", "I"}
 
 
 @dataclass
@@ -43,6 +45,10 @@ class HypergraphData:
 
 def local_tooling_path() -> str:
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), ".tooling", "python")
+
+
+def repo_root() -> str:
+    return os.path.dirname(os.path.abspath(__file__))
 
 
 def ensure_local_python_tools() -> None:
@@ -198,39 +204,457 @@ def write_openroad_tritonpart_demo(
         handle.write(f"set solution_file \"{solution_file}\"\n")
         handle.write("triton_part_hypergraph -hypergraph_file $hypergraph_file \\\n")
         handle.write("  -num_parts $num_parts -balance_constraint $balance_constraint \\\n")
-        handle.write("  -seed $seed -solution_file $solution_file\n")
+        handle.write("  -seed $seed\n")
         handle.write("evaluate_hypergraph_solution -num_parts $num_parts \\\n")
         handle.write("  -balance_constraint $balance_constraint \\\n")
         handle.write("  -hypergraph_file $hypergraph_file -solution_file $solution_file\n")
 
+    openroad_exe = find_openroad_exe()
+    openroad_env = build_openroad_env()
+
     status: Dict[str, object] = {
         "tool": "OpenROAD Partition Manager / TritonPart",
         "mode": "script-generated",
-        "available": bool(shutil.which("openroad")),
+        "run_status": "not_requested",
+        "available": bool(openroad_exe),
+        "openroad_exe": openroad_exe,
         "hgr": files["hgr"],
         "tcl": tcl_path,
         "solution_file": solution_file,
     }
-    if run_openroad and shutil.which("openroad"):
+    if run_openroad and openroad_exe:
+        status["run_status"] = "executed"
         started = time.perf_counter()
         proc = subprocess.run(
-            ["openroad", "-exit", tcl_path],
+            [openroad_exe, "-exit", tcl_path],
             cwd=os.getcwd(),
+            env=openroad_env,
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             check=False,
         )
-        status["runtime_ms"] = (time.perf_counter() - started) * 1000.0
+        elapsed_ms = (time.perf_counter() - started) * 1000.0
+        status["runtime_ms"] = elapsed_ms
         status["returncode"] = proc.returncode
         status["log"] = proc.stdout[-4000:]
+        with open(os.path.join(backend_dir, "openroad_run.log"), "w", encoding="utf-8") as handle:
+            handle.write(proc.stdout)
+        if os.path.exists(solution_file):
+            parts = read_openroad_solution(solution_file, netlist.cell_names)
+            metrics = write_partition_artifacts(
+                out_dir,
+                netlist,
+                "openroad_tritonpart",
+                parts,
+                elapsed_ms,
+                {
+                    "tool": "OpenROAD Partition Manager / TritonPart",
+                    "openroad_exe": openroad_exe,
+                    "solution_file": os.path.abspath(solution_file),
+                    "openroad_version": get_openroad_version(openroad_exe, openroad_env),
+                    "note": "Metrics are computed from the OpenROAD-generated .hgr.part.k solution file.",
+                },
+            )
+            status["metrics"] = metrics
     elif run_openroad:
+        status["run_status"] = "skipped"
         status["skipped_reason"] = "openroad executable not found"
 
     with open(os.path.join(backend_dir, "status.json"), "w", encoding="utf-8") as handle:
         json.dump(status, handle, indent=2, sort_keys=True)
         handle.write("\n")
     return status
+
+
+def find_openroad_exe() -> Optional[str]:
+    env_exe = os.environ.get("OPENROAD_EXE")
+    if env_exe and os.path.exists(env_exe):
+        return env_exe
+    path_exe = shutil.which("openroad")
+    if path_exe:
+        return path_exe
+    local_exe = os.path.join(os.getcwd(), ".tooling", "openroad_extracted", "usr", "bin", "openroad")
+    if os.path.exists(local_exe):
+        return local_exe
+    return None
+
+
+def build_openroad_env() -> Dict[str, str]:
+    env = os.environ.copy()
+    candidates = [
+        os.path.join(os.getcwd(), ".tooling", "openroad_extracted", "opt", "or-tools", "lib"),
+        os.path.join(os.getcwd(), ".tooling", "openroad_deps_extract", "usr", "lib", "x86_64-linux-gnu"),
+        os.path.join(os.getcwd(), ".tooling", "openroad_runtime_libs"),
+    ]
+    existing = [path for path in candidates if os.path.isdir(path)]
+    old = env.get("LD_LIBRARY_PATH")
+    env["LD_LIBRARY_PATH"] = ":".join(existing + ([old] if old else []))
+    return env
+
+
+def get_openroad_version(openroad_exe: str, env: Dict[str, str]) -> str:
+    try:
+        proc = subprocess.run(
+            [openroad_exe, "-version"],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            check=False,
+            env=env,
+        )
+        return proc.stdout.strip()
+    except Exception as exc:
+        return f"unknown: {exc}"
+
+
+def read_openroad_solution(solution_file: str, cell_names: Sequence[str]) -> Dict[str, int]:
+    with open(solution_file, "r", encoding="utf-8") as handle:
+        values = [int(line.strip()) for line in handle if line.strip()]
+    if len(values) != len(cell_names):
+        raise ValueError(f"solution has {len(values)} assignments, expected {len(cell_names)}")
+    return {name: values[i] for i, name in enumerate(cell_names)}
+
+
+def find_metis_exe() -> Optional[str]:
+    env_exe = os.environ.get("GPMETIS_EXE") or os.environ.get("GPMETIS")
+    if env_exe and os.path.exists(env_exe):
+        return env_exe
+    path_exe = shutil.which("gpmetis")
+    if path_exe:
+        return path_exe
+    local_exe = os.path.join(repo_root(), ".tooling", "metis_extracted", "usr", "bin", "gpmetis")
+    if os.path.exists(local_exe):
+        return local_exe
+    return None
+
+
+def build_metis_env() -> Dict[str, str]:
+    env = os.environ.copy()
+    candidates = [
+        os.path.join(repo_root(), ".tooling", "metis_extracted", "usr", "lib", "x86_64-linux-gnu"),
+        os.path.join(repo_root(), ".tooling", "metis_extracted", "usr", "lib"),
+    ]
+    existing = [path for path in candidates if os.path.isdir(path)]
+    old = env.get("LD_LIBRARY_PATH")
+    if existing or old:
+        env["LD_LIBRARY_PATH"] = ":".join(existing + ([old] if old else []))
+    return env
+
+
+def write_metis_graph(out_dir: str, netlist: base.Netlist) -> str:
+    os.makedirs(out_dir, exist_ok=True)
+    names = netlist.cell_names
+    n = len(names)
+    weights: Dict[Tuple[int, int], int] = {}
+    for left, right, weight in graph_edges(netlist):
+        key = (min(left, right), max(left, right))
+        weights[key] = weights.get(key, 0) + int(weight)
+
+    graph_path = os.path.join(out_dir, f"{netlist.module}.graph")
+    cells_path = os.path.join(out_dir, "cells.tsv")
+    adjacency: List[List[Tuple[int, int]]] = [[] for _ in range(n)]
+    for (left, right), weight in sorted(weights.items()):
+        adjacency[left].append((right, weight))
+        adjacency[right].append((left, weight))
+
+    with open(graph_path, "w", encoding="utf-8") as handle:
+        handle.write(f"{n} {len(weights)} 001\n")
+        for neighbors in adjacency:
+            tokens: List[str] = []
+            for neighbor, weight in sorted(neighbors):
+                tokens.extend([str(neighbor + 1), str(weight)])
+            handle.write(" ".join(tokens) + "\n")
+    with open(cells_path, "w", encoding="utf-8") as handle:
+        handle.write("vertex_id\tcell\n")
+        for i, name in enumerate(names, start=1):
+            handle.write(f"{i}\t{name}\n")
+    return graph_path
+
+
+def read_metis_solution(solution_file: str, cell_names: Sequence[str]) -> Dict[str, int]:
+    with open(solution_file, "r", encoding="utf-8") as handle:
+        values = [int(line.strip()) for line in handle if line.strip()]
+    if len(values) != len(cell_names):
+        raise ValueError(f"gpmetis solution has {len(values)} assignments, expected {len(cell_names)}")
+    return {name: values[i] for i, name in enumerate(cell_names)}
+
+
+def read_partition_vector(solution_file: str, cell_names: Sequence[str], tool_name: str) -> Dict[str, int]:
+    with open(solution_file, "r", encoding="utf-8") as handle:
+        values = [int(line.strip()) for line in handle if line.strip()]
+    if len(values) != len(cell_names):
+        raise ValueError(f"{tool_name} solution has {len(values)} assignments, expected {len(cell_names)}")
+    return {name: values[i] for i, name in enumerate(cell_names)}
+
+
+def run_metis(netlist: base.Netlist, k: int, out_dir: str, seed: int) -> Tuple[Dict[str, int], Dict[str, object]]:
+    if not netlist.cells:
+        return {}, {}
+    backend_dir = os.path.join(out_dir, "metis")
+    graph_path = os.path.abspath(write_metis_graph(backend_dir, netlist))
+    gpmetis = find_metis_exe()
+    if not gpmetis:
+        raise RuntimeError("gpmetis executable not found on PATH, GPMETIS_EXE, or .tooling/metis_extracted")
+
+    effective_k = min(k, len(netlist.cells))
+    if effective_k < 1:
+        raise ValueError("k must be >= 1")
+    solution_file = f"{graph_path}.part.{effective_k}"
+    if os.path.exists(solution_file):
+        os.remove(solution_file)
+
+    command = [gpmetis, "-ptype=rb", f"-seed={seed}", graph_path, str(effective_k)]
+    started = time.perf_counter()
+    proc = subprocess.run(
+        command,
+        cwd=backend_dir,
+        env=build_metis_env(),
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    elapsed_ms = (time.perf_counter() - started) * 1000.0
+    with open(os.path.join(backend_dir, "gpmetis.log"), "w", encoding="utf-8") as handle:
+        handle.write(proc.stdout)
+    if proc.returncode != 0:
+        raise RuntimeError(f"gpmetis failed with exit code {proc.returncode}; see {backend_dir}/gpmetis.log")
+    if not os.path.exists(solution_file):
+        raise FileNotFoundError(f"gpmetis did not produce expected solution file: {solution_file}")
+
+    parts = read_metis_solution(solution_file, netlist.cell_names)
+    metrics = write_partition_artifacts(
+        out_dir,
+        netlist,
+        "metis",
+        parts,
+        elapsed_ms,
+        {
+            "tool": "METIS gpmetis",
+            "gpmetis_exe": gpmetis,
+            "graph_file": graph_path,
+            "solution_file": solution_file,
+            "command": command,
+            "ptype": "rb",
+            "log_tail": proc.stdout[-2000:],
+            "note": "Hyperedges are projected to a weighted cell-cell graph before running METIS.",
+        },
+    )
+    return parts, metrics
+
+
+def find_mtkahypar_exe() -> Optional[str]:
+    env_exe = os.environ.get("MTKAHYPAR_EXE") or os.environ.get("MT_KAHYPAR_EXE")
+    if env_exe and os.path.exists(env_exe):
+        return env_exe
+    for name in ("MtKaHyPar", "mt-kahypar"):
+        path_exe = shutil.which(name)
+        if path_exe:
+            return path_exe
+    local_exe = os.path.join(
+        repo_root(),
+        ".tooling",
+        "src",
+        "mt-kahypar",
+        "build_gcc13",
+        "mt-kahypar",
+        "application",
+        "MtKaHyPar",
+    )
+    if os.path.exists(local_exe):
+        return local_exe
+    return None
+
+
+def build_mtkahypar_env() -> Dict[str, str]:
+    env = os.environ.copy()
+    candidates = [
+        os.path.join(repo_root(), ".tooling", "src", "mt-kahypar", "build_gcc13", "gnu_13.3_cxx11_64_release"),
+        os.path.join(repo_root(), ".tooling", "src", "mt-kahypar", "build_gcc13", "lib"),
+    ]
+    existing = [path for path in candidates if os.path.isdir(path)]
+    old = env.get("LD_LIBRARY_PATH")
+    if existing or old:
+        env["LD_LIBRARY_PATH"] = ":".join(existing + ([old] if old else []))
+    return env
+
+
+def run_mtkahypar(
+    netlist: base.Netlist,
+    k: int,
+    out_dir: str,
+    seed: int,
+    epsilon: float,
+    objective: str,
+    threads: int,
+) -> Tuple[Dict[str, int], Dict[str, object]]:
+    if not netlist.cells:
+        return {}, {}
+    backend_dir = os.path.join(out_dir, "mt_kahypar")
+    files = write_hmetis_files(backend_dir, netlist)
+    hgr_path = os.path.abspath(files["hgr"])
+    mtkahypar = find_mtkahypar_exe()
+    if not mtkahypar:
+        raise RuntimeError("MtKaHyPar executable not found on PATH, MTKAHYPAR_EXE, or .tooling/src/mt-kahypar")
+
+    effective_k = min(k, len(netlist.cells))
+    for filename in os.listdir(backend_dir):
+        if filename.startswith(os.path.basename(hgr_path) + ".part"):
+            os.remove(os.path.join(backend_dir, filename))
+
+    command = [
+        mtkahypar,
+        "-h",
+        hgr_path,
+        "-k",
+        str(effective_k),
+        "-e",
+        str(epsilon),
+        "-o",
+        objective,
+        "--preset-type=default",
+        "-t",
+        str(max(1, threads)),
+        "--seed",
+        str(seed),
+        "--write-partition-file",
+        f"--partition-output-folder={os.path.abspath(backend_dir)}",
+    ]
+    started = time.perf_counter()
+    proc = subprocess.run(
+        command,
+        cwd=backend_dir,
+        env=build_mtkahypar_env(),
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    elapsed_ms = (time.perf_counter() - started) * 1000.0
+    log_path = os.path.join(backend_dir, "mtkahypar.log")
+    with open(log_path, "w", encoding="utf-8") as handle:
+        handle.write(proc.stdout)
+    if proc.returncode != 0:
+        raise RuntimeError(f"MtKaHyPar failed with exit code {proc.returncode}; see {log_path}")
+
+    solution_candidates = [
+        os.path.join(backend_dir, filename)
+        for filename in os.listdir(backend_dir)
+        if filename.startswith(os.path.basename(hgr_path) + ".part")
+    ]
+    if not solution_candidates:
+        raise FileNotFoundError(f"MtKaHyPar did not produce a partition file in {backend_dir}")
+    solution_file = os.path.abspath(sorted(solution_candidates)[-1])
+
+    parts = read_partition_vector(solution_file, netlist.cell_names, "MtKaHyPar")
+    metrics = write_partition_artifacts(
+        out_dir,
+        netlist,
+        "mt_kahypar",
+        parts,
+        elapsed_ms,
+        {
+            "tool": "Mt-KaHyPar CLI",
+            "mtkahypar_exe": mtkahypar,
+            "hgr": hgr_path,
+            "solution_file": solution_file,
+            "command": command,
+            "objective": objective,
+            "epsilon": epsilon,
+            "threads": max(1, threads),
+            "log_tail": proc.stdout[-2000:],
+        },
+    )
+    return parts, metrics
+
+
+def find_patoh_exe() -> Optional[str]:
+    env_exe = os.environ.get("PATOH_EXE") or os.environ.get("PATOH")
+    if env_exe and os.path.exists(env_exe):
+        return env_exe
+    path_exe = shutil.which("patoh")
+    if path_exe:
+        return path_exe
+    local_exe = os.path.join(repo_root(), ".tooling", "patoh_extracted", "build", "Linux-x86_64", "patoh")
+    if os.path.exists(local_exe):
+        return local_exe
+    return None
+
+
+def write_patoh_hypergraph(out_dir: str, netlist: base.Netlist) -> str:
+    os.makedirs(out_dir, exist_ok=True)
+    hg = build_hypergraph_data(netlist)
+    u_path = os.path.join(out_dir, f"{netlist.module}.u")
+    pin_count = sum(len(pins) for _, pins in hg.hyperedges)
+    with open(u_path, "w", encoding="utf-8") as handle:
+        handle.write(f"1 {len(hg.cell_names)} {len(hg.hyperedges)} {pin_count}\n")
+        for _, pins in hg.hyperedges:
+            handle.write(" ".join(str(pin + 1) for pin in pins) + "\n")
+    with open(os.path.join(out_dir, "cells.tsv"), "w", encoding="utf-8") as handle:
+        handle.write("vertex_id\tcell\n")
+        for i, name in enumerate(hg.cell_names, start=1):
+            handle.write(f"{i}\t{name}\n")
+    return u_path
+
+
+def run_patoh(
+    netlist: base.Netlist,
+    k: int,
+    out_dir: str,
+    objective: str,
+) -> Tuple[Dict[str, int], Dict[str, object]]:
+    if not netlist.cells:
+        return {}, {}
+    backend_dir = os.path.join(out_dir, "patoh")
+    u_path = os.path.abspath(write_patoh_hypergraph(backend_dir, netlist))
+    patoh = find_patoh_exe()
+    if not patoh:
+        raise RuntimeError("PaToH executable not found on PATH, PATOH_EXE, or .tooling/patoh_extracted")
+
+    effective_k = min(k, len(netlist.cells))
+    solution_file = f"{u_path}.part.{effective_k}"
+    if os.path.exists(solution_file):
+        os.remove(solution_file)
+    metric_option = "UM=O" if objective == "km1" else "UM=U"
+    command = [patoh, u_path, str(effective_k), metric_option, "PQ=D", "WI=1"]
+    started = time.perf_counter()
+    proc = subprocess.run(
+        command,
+        cwd=backend_dir,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    elapsed_ms = (time.perf_counter() - started) * 1000.0
+    log_path = os.path.join(backend_dir, "patoh.log")
+    with open(log_path, "w", encoding="utf-8") as handle:
+        handle.write(proc.stdout)
+    if proc.returncode != 0:
+        raise RuntimeError(f"PaToH failed with exit code {proc.returncode}; see {log_path}")
+    if not os.path.exists(solution_file):
+        raise FileNotFoundError(f"PaToH did not produce expected solution file: {solution_file}")
+
+    parts = read_partition_vector(solution_file, netlist.cell_names, "PaToH")
+    metrics = write_partition_artifacts(
+        out_dir,
+        netlist,
+        "patoh",
+        parts,
+        elapsed_ms,
+        {
+            "tool": "PaToH standalone CLI",
+            "patoh_exe": patoh,
+            "patoh_file": u_path,
+            "solution_file": solution_file,
+            "command": command,
+            "objective": "connectivity-1" if objective == "km1" else "net-cut",
+            "license_note": "Official PaToH binary is free for non-commercial research use; commercial use requires a license.",
+            "log_tail": proc.stdout[-2000:],
+        },
+    )
+    return parts, metrics
 
 
 def graph_edges(netlist: base.Netlist) -> List[Tuple[int, int, float]]:
@@ -474,11 +898,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--epsilon", type=float, default=0.03, help="KaHyPar imbalance tolerance")
     parser.add_argument("--objective", choices=["km1", "cut"], default="km1", help="KaHyPar objective")
+    parser.add_argument("--mtkahypar-threads", type=int, default=2, help="Mt-KaHyPar worker threads")
     parser.add_argument("--gnn-epochs", type=int, default=250)
     parser.add_argument("--run-openroad", action="store_true", help="run generated Tcl if openroad exists")
     parser.add_argument(
         "--backend",
-        choices=["all", "kahypar", "openroad", "gnn", "gl0am", "louvain"],
+        choices=[
+            "all",
+            "kahypar",
+            "openroad",
+            "metis",
+            "gpmetis",
+            "mtkahypar",
+            "mt_kahypar",
+            "patoh",
+            "gnn",
+            "gl0am",
+            "louvain",
+        ],
         default="all",
     )
     args = parser.parse_args(argv)
@@ -495,7 +932,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "requested_k": args.k,
         "tools": {
             "kahypar_python": False,
-            "openroad": bool(shutil.which("openroad")),
+            "openroad": bool(find_openroad_exe()),
+            "gpmetis": bool(find_metis_exe()),
+            "mtkahypar": bool(find_mtkahypar_exe()),
+            "patoh": bool(find_patoh_exe()),
             "torch": False,
             "networkx": False,
         },
@@ -519,6 +959,41 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         openroad_status = write_openroad_tritonpart_demo(netlist, args.k, args.out, args.run_openroad)
         status["openroad_tritonpart"] = openroad_status
         print(f"OpenROAD/TritonPart script: {openroad_status['tcl']} available={openroad_status['available']}")
+
+    if args.backend in {"all", "metis", "gpmetis"}:
+        try:
+            _, metrics = run_metis(netlist, args.k, args.out, args.seed)
+            status["metis"] = {"run_status": "executed", "metrics": metrics}
+            print_metric_row("METIS(gpmetis)", metrics)
+        except Exception as exc:
+            status["metis_error"] = repr(exc)
+            print(f"METIS(gpmetis) skipped: {exc}")
+
+    if args.backend in {"all", "mtkahypar", "mt_kahypar"}:
+        try:
+            _, metrics = run_mtkahypar(
+                netlist,
+                args.k,
+                args.out,
+                args.seed,
+                args.epsilon,
+                args.objective,
+                args.mtkahypar_threads,
+            )
+            status["mtkahypar"] = {"run_status": "executed", "metrics": metrics}
+            print_metric_row("Mt-KaHyPar(real)", metrics)
+        except Exception as exc:
+            status["mtkahypar_error"] = repr(exc)
+            print(f"Mt-KaHyPar(real) skipped: {exc}")
+
+    if args.backend in {"all", "patoh"}:
+        try:
+            _, metrics = run_patoh(netlist, args.k, args.out, args.objective)
+            status["patoh"] = {"run_status": "executed", "metrics": metrics}
+            print_metric_row("PaToH(real)", metrics)
+        except Exception as exc:
+            status["patoh_error"] = repr(exc)
+            print(f"PaToH(real) skipped: {exc}")
 
     if args.backend in {"all", "gnn"}:
         try:

@@ -1,0 +1,34 @@
+******************************************************************************
+METIS 5.0 Copyright 1998-13, Regents of the University of Minnesota
+ (HEAD: , Built on: Apr 22 2024, 09:48:56)
+ size of idx_t: 32bits, real_t: 32bits, idx_t *: 64bits
+
+Graph Information -----------------------------------------------------------
+ Name: /home/caesar/ccode/netlist_split/classic_results/metis/demo_top.graph, #Vertices: 14, #Edges: 28, #Parts: 4
+
+Options ---------------------------------------------------------------------
+ ptype=rb, objtype=cut, ctype=shem, rtype=fm, iptype=grow
+ dbglvl=0, ufactor=1.001, no2hop=NO, minconn=NO, contig=NO, nooutput=NO
+ seed=7, niter=10, ncuts=1
+
+Recursive Partitioning ------------------------------------------------------
+ - Edgecut: 14, communication volume: 21.
+
+ - Balance:
+     constraint #0:  1.143 out of 0.286
+
+ - Most overweight partition:
+     pid: 1, actual: 4, desired: 3, ratio: 1.14.
+
+ - Subdomain connectivity: max: 3, min: 2, avg: 2.50
+
+ - Each partition is contiguous.
+
+Timing Information ----------------------------------------------------------
+  I/O:          		   0.001 sec
+  Partitioning: 		   0.000 sec   (METIS time)
+  Reporting:    		   0.000 sec
+
+Memory Information ----------------------------------------------------------
+  Max memory used:		   0.050 MB
+******************************************************************************
