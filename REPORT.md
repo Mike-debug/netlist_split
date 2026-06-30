@@ -74,6 +74,32 @@ global netlist
 | 有向 DAG | logic node | fanin/fanout arc | 保留方向与 cone | 平衡 cut 优化较复杂 | MFFC、逻辑优化 |
 | timing graph | pin / arc | timing arc | 适合 STA 约束 | 与 cell/net 分割需映射 | 关键路径保护 |
 
+### 3.3 DesignDB Adapter 与分割器接口格式
+
+公司自研 EDA 的内存数据模型通常与开源分割器不同，因此不能假设工具天然支持 `.graph`、`.hgr`、`.u` 等文件格式。实际工程中需要增加一层很薄的 **DesignDB Adapter**：
+
+```text
+Internal DesignDB / NetlistDB
+  -> DesignDBGraphExtractor
+  -> graph / hypergraph / in-memory arrays
+  -> PartitionToolRunner or C++ API
+  -> partition result vector
+  -> PartitionResultImporter
+  -> write partition_id back to DesignDB
+```
+
+这里的 `.v` 文件只是输入/输出和调试格式，不是主流分割算法必须依赖的接口。主流分割器真正需要的是 cell/net/pin 连接关系、权重和约束：
+
+| 接口形式 | 典型工具 | 作用 | 是否要求自研 EDA 原生支持 |
+| --- | --- | --- | --- |
+| `.graph` | METIS | 普通图邻接表，适合 graph baseline | 不要求；由 adapter 导出 |
+| `.hgr` | hMETIS / KaHyPar / Mt-KaHyPar / OpenROAD hypergraph flow | 超图输入，每条 hyperedge 表示一个 net 连接的 cell 集合 | 不要求；由 adapter 导出 |
+| `.u` | PaToH | PaToH 专用超图输入格式 | 不要求；由 adapter 导出 |
+| partition result | METIS / KaHyPar / Mt-KaHyPar / PaToH / TritonPart | 每个 vertex/cell 对应一个 partition id | 不要求；由 adapter 读回并写入 DesignDB |
+| C++ / Python API arrays | KaHyPar / Mt-KaHyPar 等 | 不落文件，直接传递 hyperedge index、pin list、weights | 推荐作为生产集成方向 |
+
+因此，生产化集成建议优先实现 `DesignDBGraphExtractor`、`HypergraphExporter`、`PartitionResultImporter` 和 `PartitionIdWriter`。文件格式适合 demo、工具互通和问题复现；若自研 EDA 与分割器同进程集成，则更推荐直接通过 C++ API 或内存数组传递，减少 I/O 和格式转换成本。
+
 ## 4. 主流算法综述
 
 ### 4.1 随机 / 贪心基线
@@ -277,6 +303,10 @@ set_load <downstream_boundary_load> [get_ports p]
   vertex weights = area, delay proxy, cell class
   hyperedge weights = fanout weight + timing criticality weight
 
+工具适配:
+  Internal DesignDB -> adapter -> .graph/.hgr/.u or API arrays
+  partition result -> adapter -> partition_id in DesignDB
+
 分割:
   baseline: random / greedy
   demo: KL/FM-like refinement + multilevel-like seed growing
@@ -310,6 +340,8 @@ set_load <downstream_boundary_load> [get_ports p]
 2. **轻量 baseline demo：`netlist_split_demo.py`**
    - 用标准库实现 random/greedy/FM-style/multilevel-style baseline；
    - 用于和真实/经典工具结果对照，验证 netlist -> hypergraph -> partition -> sub-netlist 的闭环。
+
+从公司自研 EDA 集成角度看，`classic_partition_demo.py` 中的 `.graph`、`.hgr`、`.u` 导出逻辑对应生产系统里的 adapter 层：它负责把内部 DesignDB 的 instance/net/pin 关系转成分割器可接受的 graph/hypergraph 输入，再把工具输出的 partition vector 写回内部对象。生产系统不需要让 EDA 核心数据库“原生识别”这些文件格式，只需要定义清晰的导出/导入边界。
 
 运行方式：
 
